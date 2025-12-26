@@ -34,6 +34,7 @@ interface SubNavItem {
 
 export function Sidebar({ activeItem = 'overview', isCollapsed = false }: SidebarProps) {
   const [expandedItems, setExpandedItems] = useState<string[]>(['management']);
+  const [dashboardDropdownOpen, setDashboardDropdownOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -47,6 +48,8 @@ export function Sidebar({ activeItem = 'overview', isCollapsed = false }: Sideba
       label: 'Management',
       subItems: [
         { id: 'users', label: 'Users', path: '/management/users' },
+        { id: 'students', label: 'Students', path: '/management/students' },
+        { id: 'trainers', label: 'Trainers', path: '/management/trainers' },
       ]
     },
     { id: 'file-storage', icon: <FolderClosed size={20} />, label: 'File Storage' },
@@ -85,6 +88,9 @@ export function Sidebar({ activeItem = 'overview', isCollapsed = false }: Sideba
     return location.pathname === path;
   };
 
+  const isAdminDashboard = location.pathname.includes('/admin');
+  const dashboardType = isAdminDashboard ? 'Admin Dashboard' : 'Student Dashboard';
+
   return (
     <aside 
       className={`bg-white h-screen flex flex-col p-6 transition-all duration-300 ${
@@ -102,8 +108,60 @@ export function Sidebar({ activeItem = 'overview', isCollapsed = false }: Sideba
         )}
       </div>
 
+      {/* Dashboard Switcher Dropdown */}
+      {!isCollapsed && (
+        <div className="relative mb-6">
+          <button
+            onClick={() => setDashboardDropdownOpen(!dashboardDropdownOpen)}
+            className="w-full flex items-center justify-between px-4 py-2.5 bg-[#F7F7F8] border border-[#E0E0E2] rounded-xl hover:border-[#4ECDC4] transition-colors"
+          >
+            <span className="text-sm font-medium text-[#1A1D1F] truncate">
+              {dashboardType}
+            </span>
+            <ChevronDown size={16} className="text-[#6E7191]" />
+          </button>
+          
+          {dashboardDropdownOpen && (
+            <>
+              <div 
+                className="fixed inset-0 z-10" 
+                onClick={() => setDashboardDropdownOpen(false)}
+              />
+              <div className="absolute top-full left-0 mt-2 w-full bg-white border border-[#E0E0E2] rounded-xl shadow-lg z-20 overflow-hidden">
+                <button
+                  onClick={() => {
+                    navigate('/dashboard');
+                    setDashboardDropdownOpen(false);
+                  }}
+                  className={`block w-full text-left px-4 py-3 text-sm transition-colors ${
+                    !isAdminDashboard
+                      ? 'bg-[#F7F7F8] text-[#1A1D1F] font-medium'
+                      : 'text-[#6E7191] hover:bg-[#F7F7F8]'
+                  }`}
+                >
+                  Student Dashboard
+                </button>
+                <button
+                  onClick={() => {
+                    navigate('/admin/dashboard');
+                    setDashboardDropdownOpen(false);
+                  }}
+                  className={`block w-full text-left px-4 py-3 text-sm transition-colors ${
+                    isAdminDashboard
+                      ? 'bg-[#F7F7F8] text-[#1A1D1F] font-medium'
+                      : 'text-[#6E7191] hover:bg-[#F7F7F8]'
+                  }`}
+                >
+                  Admin Dashboard
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Navigation */}
-      <nav className="flex-1 flex flex-col gap-1">
+      <nav className="flex-1 flex flex-col gap-1 overflow-y-auto">
         {navItems.map((item) => (
           <div key={item.id}>
             <button
