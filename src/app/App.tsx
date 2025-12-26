@@ -7,6 +7,8 @@ import { StudentDashboard } from './pages/StudentDashboard';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { ProfilePage } from './pages/ProfilePage';
 import { UserManagementPage } from './pages/UserManagementPage';
+import { StudentsPage } from './pages/StudentsPage';
+import { TrainersPage } from './pages/TrainersPage';
 
 export default function App() {
   return (
@@ -48,6 +50,28 @@ export default function App() {
               <ProtectedRoute>
                 <DashboardLayout>
                   <UserManagementPage />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          
+          <Route
+            path="/management/students"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <StudentsPage />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/management/trainers"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <TrainersPage />
                 </DashboardLayout>
               </ProtectedRoute>
             }

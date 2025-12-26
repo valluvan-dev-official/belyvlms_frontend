@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { Search, Bell, Menu, X, ChevronDown } from 'lucide-react';
 import { Sidebar } from '../components/Sidebar';
 import { ProfileWidget } from '../components/ProfileWidget';
 import { useAuth } from '../context/AuthContext';
+import { getMyProfile, UserProfile } from '../services/ProfileService/ProfileService';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -13,16 +14,27 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
   const location = useLocation();
   const { user: authUser } = useAuth();
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const data = await getMyProfile();
+        setUserProfile(data);
+      } catch (e) {
+        console.error("Failed to fetch profile for header", e);
+      }
+    };
+    fetchProfile();
+  }, []);
 
   const isAdminDashboard = location.pathname.includes('/admin');
-  const dashboardType = isAdminDashboard ? 'Admin Dashboard' : 'Student Dashboard';
   
   // Only show ProfileWidget on overview/dashboard pages
   const shouldShowProfileWidget = location.pathname === '/dashboard' || location.pathname === '/admin/dashboard';
-  const displayName = authUser?.name || authUser?.email?.split('@')[0] || 'User';
+  const displayName = userProfile?.name || authUser?.name || authUser?.email?.split('@')[0] || 'User';
 
   return (
     <div className="flex h-screen bg-[#FAFAFA] overflow-hidden">
@@ -65,51 +77,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 </p>
               </div>
               
-              {/* Dashboard Switcher */}
-              <div className="relative">
-                <button
-                  onClick={() => setDropdownOpen(!dropdownOpen)}
-                  className="flex items-center gap-2 px-4 py-2 bg-white border border-[#E0E0E2] rounded-xl hover:border-[#4ECDC4] transition-colors whitespace-nowrap"
-                >
-                  <span className="text-sm font-medium text-[#1A1D1F]">
-                    {dashboardType}
-                  </span>
-                  <ChevronDown size={16} className="text-[#6E7191]" />
-                </button>
-                
-                {dropdownOpen && (
-                  <>
-                    <div 
-                      className="fixed inset-0 z-10" 
-                      onClick={() => setDropdownOpen(false)}
-                    />
-                    <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-[#E0E0E2] rounded-xl shadow-lg z-20 overflow-hidden">
-                      <Link
-                        to="/dashboard"
-                        onClick={() => setDropdownOpen(false)}
-                        className={`block w-full text-left px-4 py-3 text-sm transition-colors ${
-                          !isAdminDashboard
-                            ? 'bg-[#F7F7F8] text-[#1A1D1F] font-medium'
-                            : 'text-[#6E7191] hover:bg-[#F7F7F8]'
-                        }`}
-                      >
-                        Student Dashboard
-                      </Link>
-                      <Link
-                        to="/admin/dashboard"
-                        onClick={() => setDropdownOpen(false)}
-                        className={`block w-full text-left px-4 py-3 text-sm transition-colors ${
-                          isAdminDashboard
-                            ? 'bg-[#F7F7F8] text-[#1A1D1F] font-medium'
-                            : 'text-[#6E7191] hover:bg-[#F7F7F8]'
-                        }`}
-                      >
-                        Admin Dashboard
-                      </Link>
-                    </div>
-                  </>
-                )}
-              </div>
+              {/* Dashboard Switcher moved to Sidebar */}
             </div>
 
             <div className="flex items-center gap-4">

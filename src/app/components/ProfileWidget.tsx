@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Checkbox } from './ui/checkbox';
 import { useAuth } from '../context/AuthContext';
 import { useEffect, useState } from 'react';
-import { getMyProfile, UserProfileResponse } from '../services/ProfileService/ProfileService';
+import { getMyProfile, UserProfile } from '../services/ProfileService/ProfileService';
 
 export function ProfileWidget() {
   const { logout, user: authUser } = useAuth();
@@ -11,7 +11,7 @@ export function ProfileWidget() {
   const progress = 0.75; // 75% progress
   const circumference = 2 * Math.PI * 52;
   const strokeDashoffset = circumference - (progress * circumference);
-  const [profile, setProfile] = useState<UserProfileResponse | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -26,13 +26,13 @@ export function ProfileWidget() {
   }, []);
 
   const displayName =
-    profile?.user?.name ||
+    profile?.name ||
     authUser?.name ||
     authUser?.email?.split('@')[0] ||
     'User';
 
   const displayRole =
-    profile?.user?.role_name || 'Member';
+    profile?.role || 'Member';
 
   const handleLogout = () => {
     logout();
@@ -63,6 +63,15 @@ export function ProfileWidget() {
     { id: 4, text: 'Research Objective User', category: 'Product Design', time: '09:40 PM', checked: false },
     { id: 5, text: 'Report Analysis P2P Business', category: 'Business', time: '04:30 PM', checked: true },
   ];
+
+  const getInitials = (name: string) => {
+    if (!name) return "U";
+    const parts = name.split(" ");
+    if (parts.length > 1) {
+      return `${parts[0].charAt(0)}${parts[1].charAt(0)}`.toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  };
 
   return (
     <div className="w-80 bg-white h-screen p-6 flex flex-col gap-6">
@@ -103,8 +112,16 @@ export function ProfileWidget() {
           
           {/* Profile image */}
           <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-gray-700 to-gray-900 overflow-hidden">
-              <div className="w-full h-full bg-gray-800"></div>
+            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-[#4ECDC4] to-[#44A08D] overflow-hidden flex items-center justify-center">
+               {profile?.profile_picture ? (
+                  <img 
+                    src={profile.profile_picture} 
+                    alt={displayName} 
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span className="text-white text-2xl font-semibold">{getInitials(displayName)}</span>
+                )}
             </div>
           </div>
         </div>
