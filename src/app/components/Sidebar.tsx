@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   LayoutGrid, 
@@ -9,12 +9,19 @@ import {
   Settings,
   Users,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Shield,
+  LogOut,
+  ChevronsLeft,
+  ChevronsRight
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { listOnboardRequests } from '../onboardRequests/api';
 
 interface SidebarProps {
   activeItem?: string;
   isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
 interface NavItem {
@@ -32,30 +39,69 @@ interface SubNavItem {
   path: string;
 }
 
-export function Sidebar({ activeItem = 'overview', isCollapsed = false }: SidebarProps) {
+export function Sidebar({ activeItem = 'overview', isCollapsed = false, onToggleCollapse }: SidebarProps) {
   const [expandedItems, setExpandedItems] = useState<string[]>(['management']);
   const [dashboardDropdownOpen, setDashboardDropdownOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const { activeRole, logout } = useAuth();
+  const [onboardPendingCount, setOnboardPendingCount] = useState<number>(0);
+
+  useEffect(() => {
+    if (!activeRole?.code) return;
+    (async () => {
+      try {
+        const [submitted, underReview] = await Promise.all([
+          listOnboardRequests({ status: 'SUBMITTED' }),
+          listOnboardRequests({ status: 'UNDER_REVIEW' }),
+        ]);
+        const next = (submitted?.count || 0) + (underReview?.count || 0);
+        setOnboardPendingCount(next);
+      } catch {
+        setOnboardPendingCount(0);
+      }
+    })();
+  }, [activeRole?.code]);
 
   const navItems: NavItem[] = [
-    { id: 'overview', icon: <LayoutGrid size={20} />, label: 'Overview', path: '/dashboard' },
+    { id: 'overview', icon: <LayoutGrid size={20} />, label: 'Dashboard', path: '/dashboard' },
     { id: 'assignment', icon: <ClipboardList size={20} />, label: 'Assignment' },
     { id: 'reports', icon: <ChartBar size={20} />, label: 'Reports', badge: 1 },
     { 
       id: 'management', 
       icon: <Users size={20} />, 
       label: 'Management',
+      badge: onboardPendingCount || undefined,
       subItems: [
         { id: 'users', label: 'Users', path: '/management/users' },
+        { id: 'onboard-requests', label: 'Onboard Requests', path: '/management/onboard-requests' },
         { id: 'students', label: 'Students', path: '/management/students' },
         { id: 'trainers', label: 'Trainers', path: '/management/trainers' },
       ]
     },
     { id: 'file-storage', icon: <FolderClosed size={20} />, label: 'File Storage' },
     { id: 'inbox', icon: <Inbox size={20} />, label: 'Inbox', badge: 1 },
-    { id: 'settings', icon: <Settings size={20} />, label: 'Settings' },
+    { 
+      id: 'settings', 
+      icon: <Settings size={20} />, 
+      label: 'Settings',
+      subItems: [
+        { id: 'access-control', label: 'Access Control', path: '/management/access-control' }
+      ]
+    },
   ];
+
+  // SAM-only admin schema management links
+  if (activeRole?.code === 'SAM') {
+    const mgmt = navItems.find((n) => n.id === 'management');
+    if (mgmt && mgmt.subItems) {
+      // Insert after Trainers
+      mgmt.subItems.push(
+        { id: 'profile-configs', label: 'Profile Configs', path: '/management/profile-configs' },
+        { id: 'profile-fields', label: 'Profile Fields', path: '/management/profile-fields' },
+      );
+    }
+  }
 
   const toggleExpanded = (itemId: string) => {
     setExpandedItems(prev => 
@@ -88,9 +134,6 @@ export function Sidebar({ activeItem = 'overview', isCollapsed = false }: Sideba
     return location.pathname === path;
   };
 
-  const isAdminDashboard = location.pathname.includes('/admin');
-  const dashboardType = isAdminDashboard ? 'Admin Dashboard' : 'Student Dashboard';
-
   return (
     <aside 
       className={`bg-white h-screen flex flex-col p-6 transition-all duration-300 ${
@@ -107,58 +150,6 @@ export function Sidebar({ activeItem = 'overview', isCollapsed = false }: Sideba
           <span className="font-bold text-[#1A1D1F] text-lg">BeLyv LMS</span>
         )}
       </div>
-
-      {/* Dashboard Switcher Dropdown */}
-      {!isCollapsed && (
-        <div className="relative mb-6">
-          <button
-            onClick={() => setDashboardDropdownOpen(!dashboardDropdownOpen)}
-            className="w-full flex items-center justify-between px-4 py-2.5 bg-[#F7F7F8] border border-[#E0E0E2] rounded-xl hover:border-[#4ECDC4] transition-colors"
-          >
-            <span className="text-sm font-medium text-[#1A1D1F] truncate">
-              {dashboardType}
-            </span>
-            <ChevronDown size={16} className="text-[#6E7191]" />
-          </button>
-          
-          {dashboardDropdownOpen && (
-            <>
-              <div 
-                className="fixed inset-0 z-10" 
-                onClick={() => setDashboardDropdownOpen(false)}
-              />
-              <div className="absolute top-full left-0 mt-2 w-full bg-white border border-[#E0E0E2] rounded-xl shadow-lg z-20 overflow-hidden">
-                <button
-                  onClick={() => {
-                    navigate('/dashboard');
-                    setDashboardDropdownOpen(false);
-                  }}
-                  className={`block w-full text-left px-4 py-3 text-sm transition-colors ${
-                    !isAdminDashboard
-                      ? 'bg-[#F7F7F8] text-[#1A1D1F] font-medium'
-                      : 'text-[#6E7191] hover:bg-[#F7F7F8]'
-                  }`}
-                >
-                  Student Dashboard
-                </button>
-                <button
-                  onClick={() => {
-                    navigate('/admin/dashboard');
-                    setDashboardDropdownOpen(false);
-                  }}
-                  className={`block w-full text-left px-4 py-3 text-sm transition-colors ${
-                    isAdminDashboard
-                      ? 'bg-[#F7F7F8] text-[#1A1D1F] font-medium'
-                      : 'text-[#6E7191] hover:bg-[#F7F7F8]'
-                  }`}
-                >
-                  Admin Dashboard
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-      )}
 
       {/* Navigation */}
       <nav className="flex-1 flex flex-col gap-1 overflow-y-auto">
@@ -197,9 +188,6 @@ export function Sidebar({ activeItem = 'overview', isCollapsed = false }: Sideba
                   )}
                 </>
               )}
-              {isCollapsed && item.badge && (
-                <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-[#FF6B9D]"></span>
-              )}
             </button>
 
             {/* Sub Items */}
@@ -226,6 +214,42 @@ export function Sidebar({ activeItem = 'overview', isCollapsed = false }: Sideba
           </div>
         ))}
       </nav>
+
+      {/* Footer Actions */}
+      <div className="mt-auto flex flex-col gap-1 pt-4">
+        {/* Collapse Button */}
+        {onToggleCollapse && (
+          <button
+            onClick={onToggleCollapse}
+            className={`
+              w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-[#6E7191] hover:bg-[#F7F7F8]
+              ${isCollapsed ? 'justify-center' : ''}
+            `}
+          >
+            <span>
+              {isCollapsed ? <ChevronsRight size={20} /> : <ChevronsLeft size={20} />}
+            </span>
+            {!isCollapsed && <span className="font-medium">Collapse</span>}
+          </button>
+        )}
+
+        {/* Logout Button */}
+        <button
+          onClick={() => {
+            logout();
+            navigate('/login');
+          }}
+          className={`
+            w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-[#6E7191] hover:bg-[#F7F7F8]
+            ${isCollapsed ? 'justify-center' : ''}
+          `}
+        >
+          <span>
+            <LogOut size={20} />
+          </span>
+          {!isCollapsed && <span className="font-medium">Logout</span>}
+        </button>
+      </div>
     </aside>
   );
 }

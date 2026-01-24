@@ -15,8 +15,8 @@ export interface UserListItem {
   id: number;
   email: string;
   name: string;
-  profile_picture: string | null;
-  role_name: string;
+  profile_picture?: string | null;
+  role: string;
   is_active: boolean;
   last_login: string | null;
 }
@@ -91,5 +91,162 @@ export const getAllUsers = async (): Promise<UserListItem[]> => {
   } catch (error) {
       console.error("Failed to fetch all users", error);
       return [];
+  }
+};
+
+/**
+ * Create a new user (Admin-driven onboarding)
+ * POST /api/rbac/users/create/
+ */
+export const createUser = async (payload: {
+  first_name: string;
+  last_name?: string;
+  username?: string;
+  email: string;
+  role_code: string;
+  profile?: Record<string, any>;
+}): Promise<{ id: string | number }> => {
+  try {
+    const response = await api.post("rbac/users/create/", payload);
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Discover all GenericProfile configs
+ * GET /api/profiles/configs/
+ */
+export const getProfileConfigs = async (): Promise<Array<{ id: string | number; role_code: string; name: string }>> => {
+  try {
+    const response = await api.get("profiles/configs/");
+    return response.data.results || response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const createProfileConfig = async (payload: {
+  role: number | string;
+  is_required: boolean;
+  model_path: string | null;
+}): Promise<any> => {
+  try {
+    const response = await api.post("profiles/configs/", payload);
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const updateProfileConfig = async (id: string | number, payload: Partial<{
+  role: number | string;
+  is_required: boolean;
+  model_path: string | null;
+}>): Promise<any> => {
+  try {
+    const response = await api.patch(`profiles/configs/${id}/`, payload);
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const deleteProfileConfig = async (id: string | number): Promise<void> => {
+  try {
+    await api.delete(`profiles/configs/${id}/`);
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Discover field definitions for a given config
+ * GET /api/profiles/fields/?config={CONFIG_ID}
+ */
+export const getProfileFields = async (
+  configId: string | number
+): Promise<
+  Array<{
+    id: string | number;
+    name: string;
+    code?: string;
+    type: "TEXT" | "NUMBER" | "DATE" | "BOOLEAN" | "CHOICE";
+    required: boolean;
+    choices?: string[];
+    read_only?: boolean;
+  }>
+> => {
+  try {
+    const response = await api.get(`profiles/fields/?config=${configId}`);
+    return response.data.results || response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const createProfileField = async (payload: {
+  config: number | string;
+  name: string;
+  label: string;
+  field_type: "TEXT" | "NUMBER" | "DATE" | "BOOLEAN" | "CHOICE";
+  is_required: boolean;
+  options?: string[];
+}): Promise<any> => {
+  try {
+    const response = await api.post("profiles/fields/", payload);
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const updateProfileField = async (id: string | number, payload: Partial<{
+  name: string;
+  label: string;
+  field_type: "TEXT" | "NUMBER" | "DATE" | "BOOLEAN" | "CHOICE";
+  is_required: boolean;
+  options?: string[];
+}>): Promise<any> => {
+  try {
+    const response = await api.patch(`profiles/fields/${id}/`, payload);
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const deleteProfileField = async (id: string | number): Promise<void> => {
+  try {
+    await api.delete(`profiles/fields/${id}/`);
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * GET my Generic Profile
+ * GET /api/profiles/me/
+ */
+export const getMyGenericProfile = async (): Promise<{ data: Record<string, any> }> => {
+  try {
+    const response = await api.get("profiles/me/");
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * PUT my Generic Profile
+ * PUT /api/profiles/me/
+ */
+export const putMyGenericProfile = async (data: Record<string, any>): Promise<{ data: Record<string, any> }> => {
+  try {
+    const response = await api.put("profiles/me/", { data });
+    return response.data;
+  } catch (error) {
+    throw error;
   }
 };

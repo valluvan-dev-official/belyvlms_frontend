@@ -42,7 +42,8 @@ export interface UserProfile {
 
 export interface UserData {
   access: string;
-  role: UserRole;
+  role: UserRole; // This is the ACTIVE role
+  available_roles: UserRole[];
   permissions: string[];
   user: UserProfile;
 }
@@ -75,6 +76,14 @@ export const getAccessToken = (): string | null => {
 };
 
 /**
+ * Get active role code for header injection
+ */
+export const getActiveRoleCode = (): string | null => {
+  const user = getCurrentUser();
+  return user?.role?.code || localStorage.getItem("active_role_code");
+};
+
+/**
  * Check if user has a specific permission
  */
 export const hasPermission = (permissionCode: string): boolean => {
@@ -99,7 +108,61 @@ export const getUserRole = (): UserRole | null => {
 };
 
 // ============================================
-// 3. AUTHENTICATION FUNCTIONS
+// 3. INTERCEPTORS (ENTERPRISE SECURITY)
+// ============================================
+
+api.interceptors.request.use(
+  (config) => {
+    const token = getAccessToken();
+    const activeRoleCode = getActiveRoleCode();
+
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+
+    if (activeRoleCode) {
+      config.headers["X-Active-Role"] = activeRoleCode;
+    }
+
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+api.interceptors.response.use(
+  (response) => response,
+  (error: AxiosError) => {
+    const status = error.response?.status;
+    const data: any = error.response?.data;
+    const cfg: any = error.config;
+    const skipAuthLogout =
+      cfg?.headers?.["X-Skip-Auth-Logout"] === "true" ||
+      (typeof cfg?.url === "string" && cfg.url.includes("rbac/public/onboard/"));
+
+    // Handle Role Revocation / Inactivation
+    if (status === 403) {
+      const errorCode = data?.code;
+      if (errorCode === "ROLE_INACTIVE" || errorCode === "ROLE_REVOKED") {
+        log(`⛔ Access Denied: ${errorCode}. Logging out...`);
+        logoutUser();
+      }
+    }
+    
+    // Handle Unauthorized (Token Expired/Invalid)
+    if (status === 401 && !skipAuthLogout) {
+       // Optional: Add refresh token logic here if needed later
+       log("⛔ Unauthorized. Logging out...");
+       logoutUser();
+    }
+
+    return Promise.reject(error);
+  }
+);
+
+// ============================================
+// 4. AUTHENTICATION FUNCTIONS
 // ============================================
 
 /**
@@ -113,32 +176,36 @@ export const loginUser = async (credentials: LoginCredentials): Promise<UserData
     const res = await api.post("rbac/auth/login/", credentials);
 
     log("✅ Logged in successfully!");
-    log("📦 Response data:", res.data);
+    
+    // Extract data from RBAC response
+    const { access, active_role, available_roles, permissions, user, role, must_change_password } = res.data;
 
-    // Extract data from RBAC response (only use access token)
-    const { access, role, permissions, user } = res.data;
+    // NOTE: 'role' in older API might be 'active_role' in new API.
+    // We map 'active_role' (preferred) or 'role' (fallback) to the 'role' property in UserData
+    const currentRole = active_role || role || { code: "ADMIN", name: "Admin" };
 
     // Create user object to store (no refresh token)
     const userData: UserData = {
       access,
-      role: {
-        code: role?.code || "ADMIN",
-        name: role?.name || "Admin",
-      },
+      role: currentRole,
+      available_roles: available_roles || [currentRole],
       permissions: permissions || [],
       user: {
-        id: user?.id || 1,
-        email: user?.email || credentials.email,
-        name: user?.name || user?.email?.split("@")[0] || "User",
+        id: user?.id,
+        email: user?.email,
+        name: user?.name,
       },
     };
 
-    // Store only access token (60 days validity)
+    // Store secure data
     localStorage.setItem("belyv_user", JSON.stringify(userData));
     localStorage.setItem("access", access);
+    localStorage.setItem("active_role_code", userData.role.code);
     localStorage.setItem("isAuthenticated", JSON.stringify(true));
+    if (typeof must_change_password !== "undefined") {
+      localStorage.setItem("must_change_password", JSON.stringify(!!must_change_password));
+    }
 
-    // Return userData so the login form can access it
     return userData;
   } catch (err: any) {
     log(`❌ Login failed: ${err.message}`);
@@ -149,10 +216,95 @@ export const loginUser = async (credentials: LoginCredentials): Promise<UserData
       log(`📄 Response:`, err.response.data);
       log(`📋 Detail: ${err.response.data?.detail || "No detail provided"}`);
     }
-    if (err.request) {
-      log(`📨 Request was sent but no response received`);
-    }
+    
+    throw err;
+  }
+};
 
+/**
+ * Fetch current user's permissions for active role
+ * GET /api/rbac/user/permissions
+ */
+export const getCurrentPermissions = async (): Promise<string[]> => {
+  try {
+    const res = await api.get("rbac/auth/me/");
+    const perms = res.data?.permissions;
+    return Array.isArray(perms) ? perms : [];
+  } catch (err) {
+    return [];
+  }
+};
+
+/**
+ * Switch Role
+ */
+export const switchRole = async (roleCode: string): Promise<UserData> => {
+  log(`🔄 Switching role to: ${roleCode}`);
+  
+  try {
+    const res = await api.post("rbac/auth/switch-role/", { role_code: roleCode });
+    
+    log("✅ Role switched successfully!");
+    
+    const { access, active_role, available_roles, permissions, user } = res.data;
+
+    const userData: UserData = {
+      access,
+      role: active_role,
+      available_roles: available_roles || [],
+      permissions: permissions || [],
+      user: {
+        id: user?.id,
+        email: user?.email,
+        name: user?.name,
+      },
+    };
+
+    // Update Storage
+    localStorage.setItem("belyv_user", JSON.stringify(userData));
+    localStorage.setItem("access", access);
+    localStorage.setItem("active_role_code", active_role.code);
+
+    return userData;
+  } catch (err: any) {
+    log(`❌ Switch role failed: ${err.message}`);
+    throw err;
+  }
+};
+
+/**
+ * Get Current User Context (Rehydration)
+ */
+export const getMe = async (): Promise<UserData> => {
+  log(`🔍 Fetching current context (getMe)...`);
+  
+  try {
+    const res = await api.get("rbac/auth/me/");
+    
+    const { access, active_role, available_roles, permissions, user } = res.data;
+    
+    // Use existing access token if not provided in refresh
+    const existingUser = getCurrentUser();
+    
+    const userData: UserData = {
+      access: access || existingUser?.access || "",
+      role: active_role,
+      available_roles: available_roles || [],
+      permissions: permissions || [],
+      user: {
+        id: user?.id,
+        email: user?.email,
+        name: user?.name,
+      },
+    };
+
+    localStorage.setItem("belyv_user", JSON.stringify(userData));
+    if (access) localStorage.setItem("access", access);
+    localStorage.setItem("active_role_code", active_role.code);
+    
+    return userData;
+  } catch (err: any) {
+    log(`❌ getMe failed: ${err.message}`);
     throw err;
   }
 };
@@ -167,112 +319,18 @@ export const logoutUser = () => {
     // Clear all auth data immediately
     localStorage.removeItem("belyv_user");
     localStorage.removeItem("access");
+    localStorage.removeItem("active_role_code");
     localStorage.setItem("isAuthenticated", JSON.stringify(false));
 
     log("🧹 Local storage cleared");
     log("🚪 Redirecting to login page NOW");
 
-    // Set a flag for showing logout transition
     sessionStorage.setItem("showLogoutTransition", "true");
-
-    // Immediate redirect - use href for instant navigation
     window.location.href = "/";
   } catch (error: any) {
-    // Handle SecurityError or any other error during logout
-    console.error("⚠️ SecurityError during logout:", error);
-
-    // Even if there's an error, try to clear what we can
-    try {
-      localStorage.clear();
-      sessionStorage.clear();
-    } catch (e) {
-      console.error("Could not clear storage:", e);
-    }
-
-    // Set security error flag
-    try {
-      sessionStorage.setItem("securityError", "true");
-      sessionStorage.setItem(
-        "securityErrorMessage",
-        error.message || "Unknown error"
-      );
-    } catch (e) {
-      // If even sessionStorage fails, just redirect
-      console.error("SessionStorage blocked:", e);
-    }
-
-    // Force redirect even if storage is blocked
+    console.error("⚠️ Error during logout:", error);
+    localStorage.clear();
+    sessionStorage.clear();
     window.location.href = "/";
   }
 };
-
-// ============================================
-// 4. AXIOS INTERCEPTOR
-// ============================================
-
-/**
- * Request interceptor - Auto-attach JWT token
- */
-api.interceptors.request.use(
-  (config) => {
-    // LOGGING REQUEST
-    console.log(`🌐 API REQUEST: [${config.method?.toUpperCase()}] ${config.baseURL}${config.url}`);
-
-    const token = getAccessToken();
-    if (token) {
-      // Remove "Bearer " prefix if it exists, then add it fresh
-      const cleanToken = token.startsWith("Bearer ")
-        ? token.substring(7)
-        : token;
-      config.headers.Authorization = `Bearer ${cleanToken}`;
-    }
-    return config;
-  },
-  (error) => {
-    console.error("❌ API REQUEST ERROR:", error);
-    return Promise.reject(error);
-  }
-);
-
-/**
- * Response interceptor - Handle 401 unauthorized errors
- * If token is invalid/expired (401), set unauthorized flag
- */
-api.interceptors.response.use(
-  (response) => {
-    // LOGGING SUCCESS RESPONSE
-    console.log(`✅ API SUCCESS: [${response.status}] ${response.config.url}`);
-    return response;
-  },
-  async (error: AxiosError) => {
-    // LOGGING ERROR RESPONSE
-    const url = error.config?.url || "Unknown URL";
-    const status = error.response?.status || "Network Error";
-    console.error(`❌ API ERROR: [${status}] ${url}`, error.response?.data || error.message);
-
-    // Handle 401 errors (unauthorized - token invalid or expired)
-    if (error.response?.status === 401) {
-      log("❌ 401 Unauthorized - Token invalid or expired");
-
-      // Clear all auth data
-      localStorage.removeItem("belyv_user");
-      localStorage.removeItem("access");
-      localStorage.setItem("isAuthenticated", JSON.stringify(false));
-
-      // Set unauthorized flag to trigger unauthorized page
-      localStorage.setItem("unauthorized", JSON.stringify(true));
-
-      // Trigger a custom event that App.tsx can listen to
-      window.dispatchEvent(new Event("unauthorized"));
-    }
-
-    return Promise.reject(error);
-  }
-);
-
-// ============================================
-// 5. EXPORTS
-// ============================================
-
-// Export the configured api instance for making authenticated requests
-export default api;

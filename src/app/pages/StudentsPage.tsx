@@ -10,24 +10,19 @@ import {
   RotateCcw,
   PauseCircle,
   Briefcase,
-  PieChart as PieChartIcon,
   MoreVertical,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
-import { 
-  PieChart, 
-  Pie, 
-  Cell, 
-  ResponsiveContainer, 
-  Tooltip as RechartsTooltip,
-  Legend
-} from 'recharts';
 import { getStudents, getStudentStats, Student, StudentFilters, StudentStats } from '../services/StudentService/StudentService';
 import { toast } from 'sonner';
+import { StudentProfileModal } from '../components/StudentProfileModal';
+import { BaseChart } from '../components/charts/BaseChart';
+import { CHART_COLORS } from '../components/charts/chartConfig';
 
 export function StudentsPage() {
   const [students, setStudents] = useState<Student[]>([]);
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [loading, setLoading] = useState(true);
   const [totalCount, setTotalCount] = useState(0); // Filtered total for pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -78,14 +73,41 @@ export function StudentsPage() {
     setCurrentPage(1);
   };
 
-  const totalPages = Math.ceil(totalCount / 10);
-
-  const COLORS = ['#4ECDC4', '#FFB057', '#FF6B6B'];
   const pieData = stats ? [
     { name: '> 80%', value: stats.percentageBreakdown.above80 },
     { name: '50% - 80%', value: stats.percentageBreakdown.below80 },
     { name: '< 50%', value: stats.percentageBreakdown.below50 },
   ] : [];
+
+  const chartOption = {
+      tooltip: {
+          trigger: 'item',
+          formatter: '{b}: {c}%'
+      },
+      legend: {
+          orient: 'vertical',
+          right: 0,
+          top: 'center',
+          icon: 'circle',
+          itemWidth: 8,
+          itemHeight: 8,
+          textStyle: { fontSize: 10, color: CHART_COLORS.textLight }
+      },
+      series: [
+          {
+              type: 'pie',
+              radius: ['60%', '85%'],
+              center: ['35%', '50%'],
+              avoidLabelOverlap: false,
+              label: { show: false },
+              data: pieData.map((d, i) => ({
+                  value: d.value,
+                  name: d.name,
+                  itemStyle: { color: ['#4ECDC4', '#FFB057', '#FF6B6B'][i] }
+              }))
+          }
+      ]
+  };
 
   return (
     <div className="space-y-6">
@@ -205,25 +227,7 @@ export function StudentsPage() {
         <div className="bg-white p-4 rounded-2xl border border-[#F5F5F7] shadow-sm flex flex-col items-center justify-center h-full min-h-[160px]">
            <p className="text-[#6E7191] text-xs font-medium w-full text-left mb-2">Course Progress</p>
            <div className="w-full flex-1 flex items-center justify-center text-xs">
-             <ResponsiveContainer width="100%" height={120}>
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={30}
-                    outerRadius={50}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {pieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <RechartsTooltip />
-                  <Legend iconSize={8} layout="vertical" verticalAlign="middle" align="right" />
-                </PieChart>
-             </ResponsiveContainer>
+             <BaseChart options={chartOption} height={120} />
            </div>
         </div>
       </div>
@@ -306,11 +310,19 @@ export function StudentsPage() {
                 </tr>
               ) : (
                 students.map((student) => (
-                  <tr key={student.id} className="hover:bg-[#FAFAFA] transition-colors">
+                  <tr 
+                    key={student.id} 
+                    className="hover:bg-[#FAFAFA] transition-colors cursor-pointer"
+                    onClick={() => setSelectedStudent(student)}
+                  >
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-[#E6F5F5] flex items-center justify-center text-[#4ECDC4] font-bold text-sm">
-                          {student.first_name?.[0]}{student.last_name?.[0]}
+                        <div className="w-10 h-10 rounded-full bg-[#E6F5F5] flex items-center justify-center text-[#4ECDC4] font-bold text-sm overflow-hidden">
+                          {student.profile_picture ? (
+                             <img src={student.profile_picture} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                             <span>{student.first_name?.[0]}{student.last_name?.[0]}</span>
+                          )}
                         </div>
                         <div>
                           <p className="text-sm font-medium text-[#1A1D1F]">{student.first_name} {student.last_name}</p>
@@ -380,6 +392,13 @@ export function StudentsPage() {
           </div>
         </div>
       </div>
+      
+      {selectedStudent && (
+        <StudentProfileModal 
+          student={selectedStudent} 
+          onClose={() => setSelectedStudent(null)} 
+        />
+      )}
     </div>
   );
 }
