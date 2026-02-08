@@ -1,0 +1,1 @@
+import{c as s}from"./index-DugLq9wu.js";const c=async()=>{const a=await s.get("rbac/roles/");return a.data.results||a.data},o=async a=>(await s.get(`rbac/roles/${a}/impact/`)).data,r=async(a,t)=>{await s.post(`rbac/roles/${a}/deactivate/`,t)},n=async a=>{await s.post("rbac/assign-role/",a)};export{n as a,r as d,o as g,c as l};

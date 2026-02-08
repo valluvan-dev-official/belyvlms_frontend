@@ -1,4 +1,5 @@
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell } from 'recharts';
+import { BaseChart } from "./charts/BaseChart";
+import { CHART_COLORS } from "./charts/chartConfig";
 
 const data = [
   { month: 'Jan', study: 40, exams: 0 },
@@ -9,6 +10,50 @@ const data = [
 ];
 
 export function HoursSpentChart() {
+  const chartOption = {
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' }
+    },
+    grid: {
+      left: '0%',
+      right: '0%',
+      bottom: '0%',
+      top: '10%',
+      containLabel: true
+    },
+    xAxis: {
+      type: 'category',
+      data: data.map(d => d.month),
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: { color: CHART_COLORS.textLight }
+    },
+    yAxis: {
+      type: 'value',
+      splitLine: { show: true, lineStyle: { type: 'dashed', color: CHART_COLORS.grid } },
+      axisLabel: { formatter: '{value} hr', color: CHART_COLORS.textLight }
+    },
+    series: [
+      {
+        name: 'Study',
+        type: 'bar',
+        data: data.map(d => d.study),
+        itemStyle: { color: '#FF9066', borderRadius: [4, 4, 0, 0] },
+        barMaxWidth: 30,
+        stack: 'total'
+      },
+      {
+        name: 'Exams',
+        type: 'bar',
+        data: data.map(d => d.exams),
+        itemStyle: { color: '#2E2F45', borderRadius: [4, 4, 0, 0] },
+        barMaxWidth: 30,
+        stack: 'total'
+      }
+    ]
+  };
+
   return (
     <div className="bg-white rounded-2xl p-6">
       <div className="flex items-center justify-between mb-6">
@@ -19,42 +64,13 @@ export function HoursSpentChart() {
             <span className="text-sm text-[#6E7191]">Study</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-sm bg-[#E8E8EA]"></div>
+            <div className="w-3 h-3 rounded-sm bg-[#2E2F45]"></div>
             <span className="text-sm text-[#6E7191]">Exams</span>
           </div>
         </div>
       </div>
 
-      <ResponsiveContainer width="100%" height={280}>
-        <BarChart data={data} barGap={0} barCategoryGap="20%">
-          <CartesianGrid strokeDasharray="0" vertical={false} stroke="#F5F5F7" />
-          <XAxis 
-            dataKey="month" 
-            axisLine={false}
-            tickLine={false}
-            tick={{ fill: '#6E7191', fontSize: 12 }}
-          />
-          <YAxis 
-            axisLine={false}
-            tickLine={false}
-            tick={{ fill: '#6E7191', fontSize: 12 }}
-            ticks={[0, 20, 40, 60, 80]}
-            tickFormatter={(value) => `${value} hr`}
-          />
-          <Bar 
-            dataKey="study" 
-            fill="#FF9066" 
-            radius={[8, 8, 0, 0]}
-            maxBarSize={40}
-          />
-          <Bar 
-            dataKey="exams" 
-            fill="#2E2F45" 
-            radius={[8, 8, 0, 0]}
-            maxBarSize={40}
-          />
-        </BarChart>
-      </ResponsiveContainer>
+      <BaseChart options={chartOption} height={280} />
     </div>
   );
 }

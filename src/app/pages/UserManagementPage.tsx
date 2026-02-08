@@ -26,36 +26,48 @@ interface User {
 }
 
 import { getAllUsers, UserListItem } from '../services/ProfileService/ProfileService';
+import { useNavigate } from 'react-router-dom';
+import { PermissionGuard } from '../components/PermissionGuard';
+import { PERMISSIONS } from '../config/permissions';
+import { useAuth } from '../context/AuthContext';
 
 export function UserManagementPage() {
+  const navigate = useNavigate();
+  const { hasPermission } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRole, setSelectedRole] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
-  const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const itemsPerPage = 8;
 
+  const fetchUsers = async () => {
+    // Permission Guard: Only fetch if user has USER_VIEW
+    if (!hasPermission(PERMISSIONS.USER_VIEW)) {
+      setUsers([]);
+      return;
+    }
+
+    try {
+      const data: UserListItem[] = await getAllUsers();
+      const mapped: User[] = data.map(u => ({
+        id: String(u.id),
+        name: u.name || (u.email ? u.email.split('@')[0] : 'User'),
+        email: u.email,
+        role: u.role || 'Student',
+        status: u.is_active ? 'active' : 'inactive',
+        courses: 0,
+        joinDate: u.last_login ? new Date(u.last_login).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+        avatar: u.profile_picture || undefined,
+      }));
+      setUsers(mapped);
+    } catch (e) {
+      setUsers([]);
+    }
+  };
+
   useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        const data: UserListItem[] = await getAllUsers();
-        const mapped: User[] = data.map(u => ({
-          id: String(u.id),
-          name: u.name || (u.email ? u.email.split('@')[0] : 'User'),
-          email: u.email,
-          role: u.role_name || 'Student',
-          status: u.is_active ? 'active' : 'inactive',
-          courses: 0,
-          joinDate: u.last_login ? new Date(u.last_login).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
-          avatar: u.profile_picture || undefined,
-        }));
-        setUsers(mapped);
-      } catch (e) {
-        setUsers([]);
-      }
-    };
     fetchUsers();
   }, []);
   // Filter users
@@ -105,26 +117,69 @@ export function UserManagementPage() {
     setSearchQuery('');
   };
 
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisiblePages = 5;
+    
+    if (totalPages <= maxVisiblePages) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      if (currentPage <= 3) {
+        for (let i = 1; i <= 3; i++) pages.push(i);
+        pages.push('...');
+        pages.push(totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        pages.push(1);
+        pages.push('...');
+        for (let i = totalPages - 2; i <= totalPages; i++) pages.push(i);
+      } else {
+        pages.push(1);
+        pages.push('...');
+        pages.push(currentPage - 1);
+        pages.push(currentPage);
+        pages.push(currentPage + 1);
+        pages.push('...');
+        pages.push(totalPages);
+      }
+    }
+    return pages;
+  };
+
   return (
     <>
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-semibold text-[#1A1D1F] mb-1">User Management</h2>
           <p className="text-sm text-[#6E7191]">Manage and monitor all users in the system</p>
         </div>
         <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#E0E0E2] rounded-xl hover:border-[#4ECDC4] transition-colors">
-            <Download size={18} className="text-[#6E7191]" />
-            <span className="text-sm font-medium text-[#1A1D1F]">Export</span>
-          </button>
-          <button 
-            onClick={() => setShowAddUserModal(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#4ECDC4] to-[#44A08D] text-white rounded-xl hover:shadow-lg transition-all"
-          >
-            <UserPlus size={18} />
-            <span className="text-sm font-medium">Add User</span>
-          </button>
+          <PermissionGuard permission={PERMISSIONS.USER_MANAGEMENT_EXPORT}>
+            <button className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#E0E0E2] rounded-xl hover:border-[#4ECDC4] transition-colors">
+              <Download size={18} className="text-[#6E7191]" />
+              <span className="text-sm font-medium text-[#1A1D1F]">Export</span>
+            </button>
+          </PermissionGuard>
+          <PermissionGuard permission={PERMISSIONS.USER_VIEW}>
+            <button
+              onClick={() => navigate('/management/onboard-requests')}
+              className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#E0E0E2] rounded-xl hover:border-[#4ECDC4] transition-colors"
+            >
+              <span className="text-sm font-medium text-[#1A1D1F]">Onboard Requests</span>
+            </button>
+          </PermissionGuard>
+          <PermissionGuard permission={PERMISSIONS.USER_MANAGEMENT_CREATE}>
+            <button 
+              onClick={() => navigate('/management/add-user')}
+              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#4ECDC4] to-[#44A08D] text-white rounded-xl hover:shadow-lg transition-all"
+            >
+              <UserPlus size={18} />
+              <span className="text-sm font-medium">Add User</span>
+            </button>
+          </PermissionGuard>
         </div>
       </div>
 
@@ -181,8 +236,10 @@ export function UserManagementPage() {
           >
             <option value="all">All Roles</option>
             <option value="Student">Student</option>
-            <option value="Instructor">Instructor</option>
+            <option value="Trainer">Trainer</option>
             <option value="Admin">Admin</option>
+            <option value="Placement">Placement</option>
+            <option value="Batch Coordination">Batch Coordination</option>
           </select>
 
           {/* Status Filter */}
@@ -251,6 +308,9 @@ export function UserManagementPage() {
                   User
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-[#6E7191] uppercase tracking-wider">
+                  Email
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-[#6E7191] uppercase tracking-wider">
                   Role
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-[#6E7191] uppercase tracking-wider">
@@ -277,9 +337,12 @@ export function UserManagementPage() {
                       </div>
                       <div>
                         <p className="font-medium text-[#1A1D1F]">{user.name}</p>
-                        <p className="text-sm text-[#6E7191]">{user.email}</p>
+                        <p className="text-sm text-[#6E7191]">{user.id}</p>
                       </div>
                     </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="text-sm text-[#6E7191]">{user.email}</span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-3 py-1 rounded-lg text-xs font-medium ${getRoleBadgeColor(user.role)}`}>
@@ -308,12 +371,16 @@ export function UserManagementPage() {
                       <button className="p-2 hover:bg-[#F7F7F8] rounded-lg transition-colors" title="Send Email">
                         <Mail size={16} className="text-[#6E7191]" />
                       </button>
-                      <button className="p-2 hover:bg-[#F7F7F8] rounded-lg transition-colors" title="Edit">
-                        <Edit size={16} className="text-[#6E7191]" />
-                      </button>
-                      <button className="p-2 hover:bg-[#FFF5F7] rounded-lg transition-colors" title="Delete">
-                        <Trash2 size={16} className="text-[#FF6B9D]" />
-                      </button>
+                      <PermissionGuard permission={PERMISSIONS.USER_MANAGEMENT_EDIT}>
+                        <button className="p-2 hover:bg-[#F7F7F8] rounded-lg transition-colors" title="Edit">
+                          <Edit size={16} className="text-[#6E7191]" />
+                        </button>
+                      </PermissionGuard>
+                      <PermissionGuard permission={PERMISSIONS.USER_MANAGEMENT_DELETE}>
+                        <button className="p-2 hover:bg-[#FFF5F7] rounded-lg transition-colors" title="Delete">
+                          <Trash2 size={16} className="text-[#FF6B9D]" />
+                        </button>
+                      </PermissionGuard>
                       <button className="p-2 hover:bg-[#F7F7F8] rounded-lg transition-colors">
                         <MoreVertical size={16} className="text-[#6E7191]" />
                       </button>
@@ -353,12 +420,15 @@ export function UserManagementPage() {
               <ChevronLeft size={20} className="text-[#6E7191]" />
             </button>
             
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+            {getPageNumbers().map((page, index) => (
               <button
-                key={page}
-                onClick={() => setCurrentPage(page)}
+                key={index}
+                onClick={() => typeof page === 'number' && setCurrentPage(page)}
+                disabled={page === '...'}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  currentPage === page
+                  page === '...'
+                    ? 'cursor-default text-[#6E7191]'
+                    : currentPage === page
                     ? 'bg-[#1A1D1F] text-white'
                     : 'border border-[#E0E0E2] text-[#6E7191] hover:bg-[#F7F7F8]'
                 }`}
@@ -377,77 +447,7 @@ export function UserManagementPage() {
           </div>
         </div>
       )}
-
-      {/* Add User Modal */}
-      {showAddUserModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-          <div className="bg-white rounded-2xl p-8 max-w-md w-full">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-semibold text-[#1A1D1F]">Add New User</h3>
-              <button 
-                onClick={() => setShowAddUserModal(false)}
-                className="p-2 hover:bg-[#F7F7F8] rounded-lg transition-colors"
-              >
-                <X size={20} className="text-[#6E7191]" />
-              </button>
-            </div>
-
-            <form className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-[#1A1D1F] mb-2">Full Name</label>
-                <input
-                  type="text"
-                  placeholder="Enter full name"
-                  className="w-full px-4 py-2.5 bg-[#F7F7F8] border border-transparent rounded-xl text-sm focus:outline-none focus:border-[#4ECDC4] focus:bg-white transition-all"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-[#1A1D1F] mb-2">Email</label>
-                <input
-                  type="email"
-                  placeholder="Enter email address"
-                  className="w-full px-4 py-2.5 bg-[#F7F7F8] border border-transparent rounded-xl text-sm focus:outline-none focus:border-[#4ECDC4] focus:bg-white transition-all"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-[#1A1D1F] mb-2">Role</label>
-                <select className="w-full px-4 py-2.5 bg-[#F7F7F8] border border-transparent rounded-xl text-sm focus:outline-none focus:border-[#4ECDC4] focus:bg-white transition-all">
-                  <option value="Student">Student</option>
-                  <option value="Instructor">Instructor</option>
-                  <option value="Admin">Admin</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-[#1A1D1F] mb-2">Status</label>
-                <select className="w-full px-4 py-2.5 bg-[#F7F7F8] border border-transparent rounded-xl text-sm focus:outline-none focus:border-[#4ECDC4] focus:bg-white transition-all">
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                  <option value="pending">Pending</option>
-                </select>
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowAddUserModal(false)}
-                  className="flex-1 px-4 py-2.5 border border-[#E0E0E2] text-[#6E7191] rounded-xl hover:bg-[#F7F7F8] transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-[#4ECDC4] to-[#44A08D] text-white rounded-xl hover:shadow-lg transition-all"
-                >
-                  Add User
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      </div>
     </>
   );
 }

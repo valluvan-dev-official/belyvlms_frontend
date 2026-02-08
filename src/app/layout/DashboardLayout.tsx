@@ -1,40 +1,19 @@
-import { useState, useEffect } from 'react';
-import { useLocation, Link } from 'react-router-dom';
-import { Search, Bell, Menu, X, ChevronDown } from 'lucide-react';
-import { Sidebar } from '../components/Sidebar';
-import { ProfileWidget } from '../components/ProfileWidget';
+import { useState } from 'react';
+import { Bell, Menu, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { getMyProfile, UserProfile } from '../services/ProfileService/ProfileService';
+import { Sidebar } from '../components/Sidebar';
+import { RightSidebar } from '../components/admin-dashboard/RightSidebar';
+import { RoleSwitcher } from '../components/RoleSwitcher';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
 }
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
+  const { user } = useAuth();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
-  const location = useLocation();
-  const { user: authUser } = useAuth();
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-
-  useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const data = await getMyProfile();
-        setUserProfile(data);
-      } catch (e) {
-        console.error("Failed to fetch profile for header", e);
-      }
-    };
-    fetchProfile();
-  }, []);
-
-  const isAdminDashboard = location.pathname.includes('/admin');
-  
-  // Only show ProfileWidget on overview/dashboard pages
-  const shouldShowProfileWidget = location.pathname === '/dashboard' || location.pathname === '/admin/dashboard';
-  const displayName = userProfile?.name || authUser?.name || authUser?.email?.split('@')[0] || 'User';
 
   return (
     <div className="flex h-screen bg-[#FAFAFA] overflow-hidden">
@@ -48,7 +27,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
       {/* Sidebar - Desktop */}
       <div className="hidden lg:block">
-        <Sidebar activeItem="overview" isCollapsed={sidebarCollapsed} />
+        <Sidebar 
+          activeItem="overview" 
+          isCollapsed={sidebarCollapsed} 
+          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+        />
       </div>
 
       {/* Sidebar - Mobile/Tablet */}
@@ -62,40 +45,25 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto">
-        <div className={`mx-auto p-6 lg:p-8 ${shouldShowProfileWidget ? 'max-w-7xl' : 'max-w-full'}`}>
+        <div className="mx-auto p-6 lg:p-8 max-w-full">
           {/* Header */}
-          <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-            <div className="ml-12 lg:ml-0 flex flex-col sm:flex-row items-start sm:items-center gap-3">
-              <div>
-                <h1 className="text-2xl font-semibold text-[#1A1D1F] mb-1">
-                  Hello {displayName} 👋
-                </h1>
-                <p className="text-sm text-[#6E7191]">
-                  {isAdminDashboard 
-                    ? 'Manage your learning platform' 
-                    : "Let's learn something new today!"}
-                </p>
-              </div>
-              
-              {/* Dashboard Switcher moved to Sidebar */}
-            </div>
+          <header className="flex items-center justify-end gap-4 mb-8">
+            <RoleSwitcher />
 
-            <div className="flex items-center gap-4">
-              {/* Search */}
-              <div className="relative flex-1 md:flex-initial">
-                <Search size={20} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[#6E7191]" />
-                <input
-                  type="text"
-                  placeholder="Search from courses..."
-                  className="w-full md:w-80 pl-10 pr-4 py-2.5 bg-white border border-[#E0E0E2] rounded-xl text-sm focus:outline-none focus:border-[#4ECDC4]"
-                />
-              </div>
+            {/* Notification */}
+            <button className="p-2.5 hover:bg-white rounded-xl transition-colors">
+              <Bell size={20} className="text-[#6E7191]" />
+            </button>
 
-              {/* Notification */}
-              <button className="p-2.5 hover:bg-white rounded-xl transition-colors">
-                <Bell size={20} className="text-[#6E7191]" />
-              </button>
-            </div>
+            {/* Profile Toggle */}
+            <button 
+              onClick={() => setShowProfile(!showProfile)}
+              className="ml-2 rounded-full transition-transform active:scale-95"
+            >
+              <div className="w-10 h-10 rounded-full bg-[#3A9E95] flex items-center justify-center text-white font-semibold text-lg shadow-sm">
+                {user?.name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'A'}
+              </div>
+            </button>
           </header>
 
           {/* Page Content */}
@@ -104,17 +72,15 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       </main>
 
       {/* Right Profile Panel - Desktop */}
-      {shouldShowProfileWidget && (
-        <div className="hidden xl:block">
-          <ProfileWidget />
-        </div>
-      )}
+      <div className="hidden xl:block">
+        <RightSidebar isOpen={showProfile} onClose={() => setShowProfile(false)} />
+      </div>
 
       {/* Right Profile Panel - Mobile/Tablet Overlay */}
       {showProfile && (
         <div className="xl:hidden fixed inset-0 z-40 bg-black bg-opacity-50" onClick={() => setShowProfile(false)}>
-          <div className="ml-auto h-full" onClick={(e) => e.stopPropagation()}>
-            <ProfileWidget />
+          <div className="ml-auto h-full w-80" onClick={(e) => e.stopPropagation()}>
+            <RightSidebar isOpen={true} onClose={() => setShowProfile(false)} />
           </div>
         </div>
       )}

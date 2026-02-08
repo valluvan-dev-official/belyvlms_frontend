@@ -10,24 +10,32 @@ import {
   RotateCcw,
   PauseCircle,
   Briefcase,
-  PieChart as PieChartIcon,
   MoreVertical,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
-import { 
-  PieChart, 
-  Pie, 
-  Cell, 
-  ResponsiveContainer, 
-  Tooltip as RechartsTooltip,
-  Legend
-} from 'recharts';
 import { getStudents, getStudentStats, Student, StudentFilters, StudentStats } from '../services/StudentService/StudentService';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { StudentProfileModal } from '../components/StudentProfileModal';
+import { BaseChart } from '../components/charts/BaseChart';
+import { CHART_COLORS } from '../components/charts/chartConfig';
+import { PermissionGuard } from '../components/PermissionGuard';
+import { PERMISSIONS } from '../config/permissions';
+import { useAuth } from '../context/AuthContext';
 
 export function StudentsPage() {
+  const navigate = useNavigate();
+  const { hasPermission } = useAuth();
+
+  useEffect(() => {
+    if (!hasPermission(PERMISSIONS.STUDENT_MANAGEMENT_VIEW)) {
+      navigate('/dashboard');
+    }
+  }, [hasPermission, navigate]);
+
   const [students, setStudents] = useState<Student[]>([]);
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [loading, setLoading] = useState(true);
   const [totalCount, setTotalCount] = useState(0); // Filtered total for pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -43,6 +51,7 @@ export function StudentsPage() {
 
   // Fetch static stats (once)
   useEffect(() => {
+    if (!hasPermission(PERMISSIONS.STUDENT_MANAGEMENT_STATS_VIEW)) return;
     const loadStats = async () => {
       const data = await getStudentStats();
       setStats(data);
@@ -52,6 +61,13 @@ export function StudentsPage() {
 
   // Fetch students (filtered)
   const fetchStudents = async () => {
+    if (!hasPermission(PERMISSIONS.STUDENT_MANAGEMENT_VIEW)) {
+      setStudents([]);
+      setTotalCount(0);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
       const data = await getStudents({ ...filters, page: currentPage });
@@ -66,7 +82,7 @@ export function StudentsPage() {
 
   useEffect(() => {
     fetchStudents();
-  }, [currentPage, filters.search, filters.course_status, filters.location, filters.mode_of_class]);
+  }, [currentPage, filters.search, filters.course_status, filters.location, filters.mode_of_class, hasPermission]);
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFilters(prev => ({ ...prev, search: e.target.value }));
@@ -78,14 +94,41 @@ export function StudentsPage() {
     setCurrentPage(1);
   };
 
-  const totalPages = Math.ceil(totalCount / 10);
-
-  const COLORS = ['#4ECDC4', '#FFB057', '#FF6B6B'];
   const pieData = stats ? [
     { name: '> 80%', value: stats.percentageBreakdown.above80 },
     { name: '50% - 80%', value: stats.percentageBreakdown.below80 },
     { name: '< 50%', value: stats.percentageBreakdown.below50 },
   ] : [];
+
+  const chartOption = {
+      tooltip: {
+          trigger: 'item',
+          formatter: '{b}: {c}%'
+      },
+      legend: {
+          orient: 'vertical',
+          right: 0,
+          top: 'center',
+          icon: 'circle',
+          itemWidth: 8,
+          itemHeight: 8,
+          textStyle: { fontSize: 10, color: CHART_COLORS.textLight }
+      },
+      series: [
+          {
+              type: 'pie',
+              radius: ['60%', '85%'],
+              center: ['35%', '50%'],
+              avoidLabelOverlap: false,
+              label: { show: false },
+              data: pieData.map((d, i) => ({
+                  value: d.value,
+                  name: d.name,
+                  itemStyle: { color: ['#4ECDC4', '#FFB057', '#FF6B6B'][i] }
+              }))
+          }
+      ]
+  };
 
   return (
     <div className="space-y-6">
@@ -96,14 +139,17 @@ export function StudentsPage() {
           <p className="text-[#6E7191] text-sm mt-1">Manage and monitor all student records</p>
         </div>
         <div className="flex gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-[#E0E0E2] rounded-xl text-[#1A1D1F] font-medium hover:bg-[#F7F7F8] transition-colors">
-            <Download size={20} />
-            <span>Export</span>
-          </button>
+          <PermissionGuard permission={PERMISSIONS.STUDENT_MANAGEMENT_EXPORT}>
+            <button className="flex items-center gap-2 px-4 py-2 bg-white border border-[#E0E0E2] rounded-xl text-[#1A1D1F] font-medium hover:bg-[#F7F7F8] transition-colors">
+              <Download size={20} />
+              <span>Export</span>
+            </button>
+          </PermissionGuard>
         </div>
       </div>
 
       {/* Stats Cards */}
+      <PermissionGuard permission={PERMISSIONS.STUDENT_MANAGEMENT_STATS_VIEW}>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Total Students & Status Grid - Merged */}
         <div className="md:col-span-2 bg-white p-6 rounded-2xl border border-[#F5F5F7] shadow-sm flex flex-col md:flex-row gap-8">
@@ -205,28 +251,11 @@ export function StudentsPage() {
         <div className="bg-white p-4 rounded-2xl border border-[#F5F5F7] shadow-sm flex flex-col items-center justify-center h-full min-h-[160px]">
            <p className="text-[#6E7191] text-xs font-medium w-full text-left mb-2">Course Progress</p>
            <div className="w-full flex-1 flex items-center justify-center text-xs">
-             <ResponsiveContainer width="100%" height={120}>
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={30}
-                    outerRadius={50}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {pieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <RechartsTooltip />
-                  <Legend iconSize={8} layout="vertical" verticalAlign="middle" align="right" />
-                </PieChart>
-             </ResponsiveContainer>
+             <BaseChart options={chartOption} height={120} />
            </div>
         </div>
       </div>
+      </PermissionGuard>
 
       {/* Filters & Search */}
       <div className="bg-white p-4 rounded-2xl border border-[#F5F5F7] shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between">
@@ -306,11 +335,23 @@ export function StudentsPage() {
                 </tr>
               ) : (
                 students.map((student) => (
-                  <tr key={student.id} className="hover:bg-[#FAFAFA] transition-colors">
+                  <tr 
+                    key={student.id} 
+                    className="hover:bg-[#FAFAFA] transition-colors cursor-pointer"
+                    onClick={() => {
+                      if (hasPermission(PERMISSIONS.STUDENT_MANAGEMENT_PROFILE_VIEW)) {
+                        setSelectedStudent(student);
+                      }
+                    }}
+                  >
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-[#E6F5F5] flex items-center justify-center text-[#4ECDC4] font-bold text-sm">
-                          {student.first_name?.[0]}{student.last_name?.[0]}
+                        <div className="w-10 h-10 rounded-full bg-[#E6F5F5] flex items-center justify-center text-[#4ECDC4] font-bold text-sm overflow-hidden">
+                          {student.profile_picture ? (
+                             <img src={student.profile_picture} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                             <span>{student.first_name?.[0]}{student.last_name?.[0]}</span>
+                          )}
                         </div>
                         <div>
                           <p className="text-sm font-medium text-[#1A1D1F]">{student.first_name} {student.last_name}</p>
@@ -380,6 +421,13 @@ export function StudentsPage() {
           </div>
         </div>
       </div>
+      
+      {selectedStudent && (
+        <StudentProfileModal 
+          student={selectedStudent} 
+          onClose={() => setSelectedStudent(null)} 
+        />
+      )}
     </div>
   );
 }

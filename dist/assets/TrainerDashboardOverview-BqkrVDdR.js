@@ -1,0 +1,1 @@
+import{j as r}from"./index-DugLq9wu.js";import{D as o}from"./UnifiedDashboard-CLOxFRaN.js";import"./clock-BXNFGudH.js";import"./createLucideIcon-CZphTAsl.js";import"./calendar-CpRiXAED.js";import"./graduation-cap-O00jTCyK.js";import"./users-DW4esK_h.js";import"./utils-DjqsqOe8.js";function x(){return r.jsx(o,{role:"trainer"})}export{x as TrainerDashboardOverview};

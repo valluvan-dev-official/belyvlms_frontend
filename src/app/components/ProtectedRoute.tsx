@@ -3,11 +3,13 @@ import { useAuth } from '../context/AuthContext';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
+  permission?: string;
 }
 
-export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { isAuthenticated, isLoading } = useAuth();
+export function ProtectedRoute({ children, permission }: ProtectedRouteProps) {
+  const { isAuthenticated, isLoading, hasPermission } = useAuth();
   const location = useLocation();
+  const mustChange = JSON.parse(localStorage.getItem("must_change_password") || "false");
 
   if (isLoading) {
     return (
@@ -23,6 +25,14 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   if (!isAuthenticated) {
     // Redirect to login page but save the location they were trying to access
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  if (mustChange && location.pathname !== "/reset-password") {
+    return <Navigate to="/reset-password" replace />;
+  }
+
+  if (permission && !hasPermission(permission)) {
+    return <Navigate to="/access-denied" replace />;
   }
 
   return <>{children}</>;

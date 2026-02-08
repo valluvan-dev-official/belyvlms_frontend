@@ -11,6 +11,13 @@ import {
   updateMyProfile,
   UserProfile,
 } from "../services/ProfileService/ProfileService";
+import { 
+  getProfileConfigs, 
+  getProfileFields, 
+  getMyGenericProfile, 
+  putMyGenericProfile 
+} from "../services/ProfileService/ProfileService";
+import { getCurrentUser } from "../services/AuthenticationService/AuthenticationService";
 import { toast } from "sonner";
 
 export function ProfilePage() {
@@ -22,6 +29,12 @@ export function ProfilePage() {
     name: "",
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [configId, setConfigId] = useState<string | number | null>(null);
+  const [optionalDefs, setOptionalDefs] = useState<
+    Array<{ id: string | number; name: string; code?: string; type: "TEXT" | "NUMBER" | "DATE" | "BOOLEAN" | "CHOICE"; required: boolean; choices?: string[]; read_only?: boolean }>
+  >([]);
+  const [optionalValues, setOptionalValues] = useState<Record<string, any>>({});
+  const [savingOptional, setSavingOptional] = useState(false);
 
   useEffect(() => {
     fetchProfile();
@@ -35,11 +48,56 @@ export function ProfilePage() {
       setForm({
         name: data.name || "",
       });
+      await fetchOptionalFields();
+      await hydrateGenericProfile();
     } catch (error) {
       console.error("Failed to fetch profile:", error);
       toast.error("Failed to load profile data");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchOptionalFields = async () => {
+    const local = getCurrentUser();
+    const roleCode = local?.role?.code || "";
+    try {
+      const cfgs = await getProfileConfigs();
+      const cfg = cfgs.find((c: any) => {
+        const rc = ((c.role_code || c.code || "") as string).toUpperCase();
+        const name = ((c.name || "") as string).toLowerCase();
+        return rc === roleCode || name.includes("generic");
+      });
+      if (!cfg) {
+        setConfigId(null);
+        setOptionalDefs([]);
+        return;
+      }
+      setConfigId(cfg.id);
+      const defs = await getProfileFields(cfg.id);
+      const optional = defs.filter((d: any) => !d.required);
+      setOptionalDefs(optional);
+      const initVals: Record<string, any> = {};
+      optional.forEach((d: any) => {
+        const key = d.code || d.name;
+        initVals[key] = d.type === "BOOLEAN" ? false : "";
+      });
+      setOptionalValues(initVals);
+    } catch {
+      setConfigId(null);
+      setOptionalDefs([]);
+    }
+  };
+
+  const hydrateGenericProfile = async () => {
+    try {
+      const gp = await getMyGenericProfile();
+      const existing = gp?.data || {};
+      if (existing && typeof existing === "object") {
+        setOptionalValues((prev) => ({ ...prev, ...existing }));
+      }
+    } catch {
+      // ignore
     }
   };
 
@@ -95,6 +153,92 @@ export function ProfilePage() {
 
   const triggerImageUpload = () => {
     fileInputRef.current?.click();
+  };
+
+  const renderInputForDef = (def: { name: string; code?: string; type: "TEXT" | "NUMBER" | "DATE" | "BOOLEAN" | "CHOICE"; required: boolean; choices?: string[]; read_only?: boolean }) => {
+    const key = def.code || def.name;
+    switch (def.type) {
+      case "TEXT":
+        return (
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">{def.name}</label>
+            <input
+              type="text"
+              value={optionalValues[key] || ""}
+              onChange={(e) => setOptionalValues({ ...optionalValues, [key]: e.target.value })}
+              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-teal-400"
+            />
+          </div>
+        );
+      case "NUMBER":
+        return (
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">{def.name}</label>
+            <input
+              type="number"
+              value={optionalValues[key] ?? ""}
+              onChange={(e) => setOptionalValues({ ...optionalValues, [key]: e.target.value ? Number(e.target.value) : "" })}
+              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-teal-400"
+            />
+          </div>
+        );
+      case "DATE":
+        return (
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">{def.name}</label>
+            <input
+              type="date"
+              value={optionalValues[key] || ""}
+              onChange={(e) => setOptionalValues({ ...optionalValues, [key]: e.target.value })}
+              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-teal-400"
+            />
+          </div>
+        );
+      case "BOOLEAN":
+        return (
+          <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={!!optionalValues[key]}
+              onChange={(e) => setOptionalValues({ ...optionalValues, [key]: e.target.checked })}
+              className="w-4 h-4"
+            />
+            {def.name}
+          </label>
+        );
+      case "CHOICE":
+        return (
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">{def.name}</label>
+            <select
+              value={optionalValues[key] || ""}
+              onChange={(e) => setOptionalValues({ ...optionalValues, [key]: e.target.value })}
+              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-teal-400"
+            >
+              <option value="">Select</option>
+              {(def.choices || []).map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
+
+  const saveOptionalFields = async () => {
+    try {
+      setSavingOptional(true);
+      const payload = { ...optionalValues };
+      const res = await putMyGenericProfile(payload);
+      setOptionalValues(res?.data || payload);
+      toast.success("Profile details updated");
+    } catch (e) {
+      toast.error("Failed to update profile details");
+    } finally {
+      setSavingOptional(false);
+    }
   };
 
   if (loading) {
@@ -236,9 +380,32 @@ export function ProfilePage() {
           </div>
         </div>
 
-        {/* Info Cards - Only show relevant info since we lost bio/phone/address */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-           {/* We can add more sections here if API provides more data later */}
+        <div className="grid grid-cols-1 gap-6">
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-[#E0E0E2]">
+            <h2 className="text-lg font-bold text-[#1A1D1F] mb-4">Profile Details</h2>
+            {configId && optionalDefs.length > 0 ? (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {optionalDefs.map((def) => (
+                    <div key={def.id}>{renderInputForDef(def)}</div>
+                  ))}
+                </div>
+                <div className="mt-4 flex justify-end">
+                  <button
+                    onClick={saveOptionalFields}
+                    disabled={savingOptional}
+                    className="px-6 py-2.5 bg-[#1A1D1F] text-white rounded-xl hover:bg-black disabled:opacity-50"
+                  >
+                    {savingOptional ? "Saving..." : "Save Details"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-[#6E7191]">
+                No optional profile fields available for your role.
+              </p>
+            )}
+          </div>
         </div>
       </div>
     </div>
