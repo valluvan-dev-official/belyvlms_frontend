@@ -57,6 +57,24 @@ const buildInitialValues = (schema: PublicOnboardSchemaResponse) => {
   return { first_name, last_name, profile, rawJson };
 };
 
+const unflatten = (data: Record<string, any>) => {
+  const result: any = {};
+  for (const k in data) {
+    const keys = k.split('.');
+    let current = result;
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i];
+      if (i === keys.length - 1) {
+        current[key] = data[k];
+      } else {
+        current[key] = current[key] || {};
+        current = current[key];
+      }
+    }
+  }
+  return result;
+};
+
 export function PublicRegisterPage() {
   const location = useLocation();
   const token = useMemo(() => parseToken(location.search), [location.search]);
@@ -170,11 +188,9 @@ export function PublicRegisterPage() {
     if (!schema) return { steps: [] as Array<{ id: SectionId; fields: typeof schema.fields }>, activeId: null as SectionId | null, lastIndex: 0 };
     const by: Record<SectionId, any[]> = {
       personal: [],
-      contact: [],
-      address: [],
-      course: [],
-      education: [],
+      academic: [],
       work: [],
+      admission: [],
       advanced: [],
       other: [],
     };
@@ -321,13 +337,14 @@ export function PublicRegisterPage() {
       return;
     }
 
-    const profile: Record<string, any> = { ...values.profile };
+    // 1. Prepare flat profile
+    const flatProfile: Record<string, any> = { ...values.profile };
     for (const f of schema.fields || []) {
       if (f.key.startsWith("profile.") && f.type === "JSON") {
         const raw = values.rawJson[f.key] ?? "{}";
         try {
           const parsed = JSON.parse(raw || "{}");
-          profile[f.key.slice("profile.".length)] = parsed;
+          flatProfile[f.key.slice("profile.".length)] = parsed;
         } catch {
           setErrors((p) => ({ ...p, [f.key]: "Invalid JSON" }));
           toast.error("Invalid JSON");
@@ -336,12 +353,15 @@ export function PublicRegisterPage() {
       }
     }
 
+    // 2. Unflatten profile
+    const nestedProfile = unflatten(flatProfile);
+
     setSubmitLoading(true);
     try {
       const res = await submitPublicOnboard(token, {
         first_name: values.first_name.trim(),
         last_name: values.last_name.trim(),
-        profile,
+        profile: nestedProfile,
       });
       const requestCode = res?.request_code || schema.request_code;
       setSubmittedCode(String(requestCode));
@@ -499,67 +519,59 @@ export function PublicRegisterPage() {
                 }}
               />
 
-              <div className="mt-10 flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={onCancelWizard}
-                  disabled={submitLoading}
-                  className="px-5 py-2.5 bg-white border border-[#E0E0E2] text-[#1A1D1F] rounded-lg font-semibold hover:border-[#4ECDC4] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Cancel
-                </button>
-                {wizard.steps.length > 1 && wizard.safeIndex > 0 ? (
-                  <button
-                    type="button"
-                    onClick={onBack}
-                    disabled={submitLoading}
-                    className="px-5 py-2.5 bg-white border border-[#E0E0E2] text-[#1A1D1F] rounded-lg font-semibold hover:border-[#4ECDC4] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Back
-                  </button>
-                ) : null}
-                {wizard.steps.length > 1 && wizard.safeIndex < wizard.lastIndex ? (
-                  <button
-                    type="button"
-                    onClick={onContinue}
-                    disabled={submitLoading}
-                    className="px-5 py-2.5 bg-[#35C46A] text-white rounded-lg font-semibold hover:bg-[#2EAF5E] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Continue →
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={submit}
-                    disabled={submitLoading}
-                    className="px-5 py-2.5 bg-[#35C46A] text-white rounded-lg font-semibold hover:bg-[#2EAF5E] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {submitLoading ? "Submitting..." : "Submit"}
-                  </button>
-                )}
-              </div>
+              {wizard.steps.length > 0 && (
+                <div className="flex items-center justify-between mt-8 pt-6 border-t border-[#E0E0E2]">
+                  {stepIndex > 0 ? (
+                    <button
+                      type="button"
+                      disabled={submitLoading}
+                      onClick={onBack}
+                      className="px-6 py-2.5 text-sm font-medium text-[#6E7191] hover:text-[#1A1D1F] transition-colors"
+                    >
+                      Back
+                    </button>
+                  ) : (
+                    <div />
+                  )}
+                  
+                  {stepIndex < wizard.lastIndex ? (
+                    <button
+                      type="button"
+                      disabled={submitLoading}
+                      onClick={onContinue}
+                      className="px-6 py-2.5 bg-[#1A1D1F] text-white rounded-xl text-sm font-medium hover:bg-black transition-colors"
+                    >
+                      Continue
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={submitLoading}
+                      onClick={submit}
+                      className="px-6 py-2.5 bg-[#4ECDC4] text-white rounded-xl text-sm font-medium hover:bg-[#45b7af] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {submitLoading ? "Submitting..." : "Submit Registration"}
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
-
-            <div className="bg-white border border-[#E0E0E2] rounded-2xl p-6 h-fit">
-              <div className="text-sm font-semibold text-[#1A1D1F]">Invitation</div>
-              <div className="text-xs text-[#6E7191] mt-1">This link is tied to your email and role.</div>
-              <div className="mt-5 space-y-4">
-                <div>
-                  <div className="text-xs text-[#6E7191] mb-1">Email</div>
-                  <div className="text-sm text-[#1A1D1F] break-all">{schema.email}</div>
+            <div className="bg-white border border-[#E0E0E2] rounded-2xl p-6">
+              <div className="text-sm font-semibold text-[#1A1D1F] mb-4">Registration Summary</div>
+              <div className="space-y-4">
+                <div className="flex justify-between text-sm">
+                  <span className="text-[#6E7191]">Name</span>
+                  <span className="font-medium text-[#1A1D1F]">{values.first_name} {values.last_name}</span>
                 </div>
-                <div>
-                  <div className="text-xs text-[#6E7191] mb-1">Role</div>
-                  <div className="text-sm text-[#1A1D1F]">{schema.role_name || schema.role_code}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-[#6E7191] mb-1">Expires</div>
-                  <div className="text-sm text-[#1A1D1F]">{formatDate(schema.expires_at)}</div>
-                </div>
+                {/* Add more summary fields if needed */}
               </div>
             </div>
           </div>
-        ) : null}
+        ) : (
+          <div className="text-center py-20 text-[#6E7191]">
+             No form schema available.
+          </div>
+        )}
       </div>
     </div>
   );

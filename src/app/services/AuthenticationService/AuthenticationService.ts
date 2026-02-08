@@ -120,8 +120,13 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
 
-    if (activeRoleCode) {
+    if (activeRoleCode && !config.headers["X-Skip-Active-Role"]) {
       config.headers["X-Active-Role"] = activeRoleCode;
+    }
+
+    // Clean up internal header
+    if (config.headers["X-Skip-Active-Role"]) {
+      delete config.headers["X-Skip-Active-Role"];
     }
 
     return config;
@@ -141,12 +146,25 @@ api.interceptors.response.use(
       cfg?.headers?.["X-Skip-Auth-Logout"] === "true" ||
       (typeof cfg?.url === "string" && cfg.url.includes("rbac/public/onboard/"));
 
-    // Handle Role Revocation / Inactivation
+    // Handle Role Revocation / Inactivation (FATAL)
     if (status === 403) {
       const errorCode = data?.code;
       if (errorCode === "ROLE_INACTIVE" || errorCode === "ROLE_REVOKED") {
         log(`⛔ Access Denied: ${errorCode}. Logging out...`);
         logoutUser();
+        return Promise.reject(error);
+      }
+      
+      // SELF-HEALING: Generic Permission Denial (403)
+      // If we get a 403 that is NOT fatal, it implies our cached permissions are stale.
+      // We should silently refresh the context so the UI can update (e.g., hide the button).
+      if (!skipAuthLogout) {
+          log("⚠️ Permission denied. Refreshing context to self-heal UI...");
+          getMe().then(() => {
+              window.dispatchEvent(new Event("belyv_auth_update"));
+          }).catch(err => {
+              console.error("❌ Failed to refresh context after 403:", err);
+          });
       }
     }
     
@@ -177,18 +195,14 @@ export const loginUser = async (credentials: LoginCredentials): Promise<UserData
 
     log("✅ Logged in successfully!");
     
-    // Extract data from RBAC response
-    const { access, active_role, available_roles, permissions, user, role, must_change_password } = res.data;
+    // Extract data from RBAC response (Unified Auth Context)
+    const { access, active_role, available_roles, permissions, user, must_change_password } = res.data;
 
-    // NOTE: 'role' in older API might be 'active_role' in new API.
-    // We map 'active_role' (preferred) or 'role' (fallback) to the 'role' property in UserData
-    const currentRole = active_role || role || { code: "ADMIN", name: "Admin" };
-
-    // Create user object to store (no refresh token)
+    // Create user object to store
     const userData: UserData = {
       access,
-      role: currentRole,
-      available_roles: available_roles || [currentRole],
+      role: active_role,
+      available_roles: available_roles || [],
       permissions: permissions || [],
       user: {
         id: user?.id,
@@ -200,7 +214,7 @@ export const loginUser = async (credentials: LoginCredentials): Promise<UserData
     // Store secure data
     localStorage.setItem("belyv_user", JSON.stringify(userData));
     localStorage.setItem("access", access);
-    localStorage.setItem("active_role_code", userData.role.code);
+    localStorage.setItem("active_role_code", active_role.code);
     localStorage.setItem("isAuthenticated", JSON.stringify(true));
     if (typeof must_change_password !== "undefined") {
       localStorage.setItem("must_change_password", JSON.stringify(!!must_change_password));
@@ -236,20 +250,43 @@ export const getCurrentPermissions = async (): Promise<string[]> => {
 };
 
 /**
+ * Live Permission Check
+ * POST /api/rbac/auth/check-permissions/
+ */
+export const checkPermissions = async (permissions: string[]): Promise<Record<string, boolean>> => {
+  try {
+    const res = await api.post("rbac/auth/check-permissions/", { permissions });
+    return res.data;
+  } catch (err: any) {
+    console.error("❌ checkPermissions failed:", err);
+    // Fallback: return false for all requested permissions
+    return permissions.reduce((acc, perm) => ({ ...acc, [perm]: false }), {});
+  }
+};
+
+/**
  * Switch Role
  */
 export const switchRole = async (roleCode: string): Promise<UserData> => {
   log(`🔄 Switching role to: ${roleCode}`);
   
   try {
-    const res = await api.post("rbac/auth/switch-role/", { role_code: roleCode });
+    // Send request without X-Active-Role header to avoid permission checks on the *current* role
+    const res = await api.post(
+      "rbac/auth/switch-role/", 
+      { role_code: roleCode },
+      { headers: { "X-Skip-Active-Role": "true" } }
+    );
     
     log("✅ Role switched successfully!");
     
     const { access, active_role, available_roles, permissions, user } = res.data;
 
+    // Fallback to existing token if not provided
+    const existingToken = localStorage.getItem("access");
+
     const userData: UserData = {
-      access,
+      access: access || existingToken || "",
       role: active_role,
       available_roles: available_roles || [],
       permissions: permissions || [],
@@ -262,7 +299,7 @@ export const switchRole = async (roleCode: string): Promise<UserData> => {
 
     // Update Storage
     localStorage.setItem("belyv_user", JSON.stringify(userData));
-    localStorage.setItem("access", access);
+    if (access) localStorage.setItem("access", access);
     localStorage.setItem("active_role_code", active_role.code);
 
     return userData;
@@ -281,16 +318,56 @@ export const getMe = async (): Promise<UserData> => {
   try {
     const res = await api.get("rbac/auth/me/");
     
-    const { access, active_role, available_roles, permissions, user } = res.data;
+    // DEBUG: Log the full response to see what backend is actually returning
+    console.log("🔍 FULL API RESPONSE (Debugging):", res.data);
+    console.log("🔑 Response Keys:", Object.keys(res.data));
+    if (res.data.user) {
+        console.log("👤 User Object:", res.data.user);
+        console.log("👤 User Keys:", Object.keys(res.data.user));
+    }
+
+    // Unified Auth Context from Backend (Single Source of Truth)
+    // We try to grab 'active_role', but if it's missing, we check 'role'
+    const data = res.data;
+    const { access, available_roles, permissions, user } = data;
     
+    // ATTEMPT TO FIND ROLE: Check 'active_role', 'role', or inside 'user.role'
+    let raw_role = data.active_role || data.role;
+    
+    if (!raw_role && user?.role) {
+        console.warn("⚠️ Found role inside 'user' object instead of root. Adapting...");
+        raw_role = user.role;
+    }
+
+    // FIX: Handle case where role is just a string code (e.g. "BTR")
+    let active_role: UserRole;
+    if (typeof raw_role === 'string') {
+        console.warn(`⚠️ Role is a string ("${raw_role}"), converting to object...`);
+        active_role = { code: raw_role, name: raw_role };
+    } else {
+        active_role = raw_role;
+    }
+
+    // FIX: Handle missing available_roles
+    // If backend doesn't send them, we default to just the active role so the switcher isn't empty
+    let final_available_roles = available_roles || [];
+    if (final_available_roles.length === 0 && active_role) {
+         console.warn("⚠️ No available_roles found. Defaulting to active role.");
+         final_available_roles = [active_role];
+    }
+
+    log(`✅ RBAC Context Loaded:`);
+    log(`🎭 Active Role:`, active_role);
+    log(`🔐 Permissions (${permissions?.length || 0}):`, permissions);
+
     // Use existing access token if not provided in refresh
-    const existingUser = getCurrentUser();
+    const existingToken = localStorage.getItem("access");
     
     const userData: UserData = {
-      access: access || existingUser?.access || "",
-      role: active_role,
-      available_roles: available_roles || [],
-      permissions: permissions || [],
+      access: access || existingToken || "",
+      role: active_role, // Fully trust backend
+      available_roles: final_available_roles,
+      permissions: permissions || [], // Fully trust backend
       user: {
         id: user?.id,
         email: user?.email,
@@ -300,7 +377,9 @@ export const getMe = async (): Promise<UserData> => {
 
     localStorage.setItem("belyv_user", JSON.stringify(userData));
     if (access) localStorage.setItem("access", access);
-    localStorage.setItem("active_role_code", active_role.code);
+    if (active_role?.code) {
+        localStorage.setItem("active_role_code", active_role.code);
+    }
     
     return userData;
   } catch (err: any) {

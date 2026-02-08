@@ -1,6 +1,7 @@
-import { useMemo } from "react";
+import { useMemo, useEffect, useState } from "react";
 import { SearchableSelect } from "../../components/ui/SearchableSelect";
 import type { PublicSchemaField, SchemaChoiceOption } from "../types";
+import { getCountries, getStates, getCities, Country, State, City } from "../../services/LocationService/LocationService";
 
 const titleCase = (s: string) =>
   s
@@ -29,45 +30,61 @@ type Values = {
   rawJson: Record<string, string>;
 };
 
-const labelForKey = (key: string) => {
+const labelForKey = (key: string, label?: string) => {
+  if (label) return label;
   if (key.startsWith("profile.")) return titleCase(key.slice("profile.".length));
   return titleCase(key);
 };
 
-export type SectionId = "personal" | "contact" | "address" | "course" | "education" | "work" | "advanced" | "other";
+export type SectionId = "personal" | "academic" | "work" | "admission" | "advanced" | "other";
 
 export const sectionMeta: Record<SectionId, { title: string; desc: string }> = {
-  personal: { title: "Personal Details", desc: "Basic details used for your account." },
-  contact: { title: "Contact Details", desc: "How we can reach you." },
-  address: { title: "Location", desc: "Your current location information." },
-  course: { title: "Course Preferences", desc: "Preferences needed for onboarding." },
-  education: { title: "Education", desc: "Academic details for your profile." },
-  work: { title: "Work", desc: "Work status and experience information." },
-  advanced: { title: "Additional Details", desc: "Provide structured information if required." },
-  other: { title: "Other Details", desc: "Additional fields requested for onboarding." },
+  personal: { title: "Personal Details", desc: "Identity and contact information." },
+  academic: { title: "Education", desc: "Academic details and background." },
+  work: { title: "Professional Experience", desc: "Work status and history." },
+  admission: { title: "Course & Admission", desc: "Course preferences and admission details." },
+  advanced: { title: "Additional Details", desc: "Structured information." },
+  other: { title: "Other Details", desc: "Additional fields." },
 };
 
 export const getSectionId = (f: PublicSchemaField): SectionId => {
+  // Prioritize explicit section from API
+  if (f.section) {
+    const s = f.section.toLowerCase();
+    if (s.includes("personal") || s.includes("identity") || s.includes("contact")) return "personal";
+    if (s.includes("work") || s.includes("experience")) return "work";
+    
+    // Heuristic to disambiguate "Education" section
+    if (s.includes("education") || s.includes("academic")) {
+       const k = String(f.key || "").toLowerCase();
+       // If the key suggests course/admission details, put it in admission
+       if (k.includes("course") || k.includes("batch") || k.includes("trainer") || k.includes("mode") || k.includes("week_type") || k.includes("category")) {
+         return "admission";
+       }
+       return "academic";
+    }
+    
+    if (s.includes("course") || s.includes("admission")) return "admission";
+  }
+
+  // Fallback heuristics
   const k = String(f.key || "").toLowerCase();
   if (f.key === "first_name" || f.key === "last_name") return "personal";
   if (f.type === "JSON") return "advanced";
-  if (k.includes("phone") || k.includes("country_code") || k.includes("whatsapp")) return "contact";
-  if (k.includes("address") || k.includes("location") || k.includes("city") || k.includes("state")) return "address";
-  if (
-    k.includes("course") ||
-    k.includes("batch") ||
-    k.includes("trainer") ||
-    k.includes("category") ||
-    k.includes("mode_of_class") ||
-    k.includes("week_type")
-  )
-    return "course";
-  if (k.includes("ug") || k.includes("pg") || k.includes("degree") || k.includes("passout") || k.includes("percentage")) return "education";
-  if (k.includes("working") || k.includes("employment") || k.includes("experience") || k.includes("company")) return "work";
+  
+  if (k.includes("phone") || k.includes("country_code") || k.includes("whatsapp") || k.includes("email")) return "personal";
+  if (k.includes("address") || k.includes("location") || k.includes("city") || k.includes("state") || k.includes("pincode") || k.includes("zip")) return "personal";
+  
+  if (k.includes("course") || k.includes("batch") || k.includes("trainer") || k.includes("category") || k.includes("mode") || k.includes("week")) return "admission";
+  
+  if (k.includes("ug") || k.includes("pg") || k.includes("degree") || k.includes("passout") || k.includes("percentage") || k.includes("college") || k.includes("school") || k.includes("university") || k.includes("sslc") || k.includes("hsc")) return "academic";
+  
+  if (k.includes("working") || k.includes("employment") || k.includes("experience") || k.includes("company") || k.includes("designation") || k.includes("salary") || k.includes("skill")) return "work";
+  
   return "other";
 };
 
-export const sectionOrder: SectionId[] = ["personal", "contact", "address", "course", "education", "work", "advanced", "other"];
+export const sectionOrder: SectionId[] = ["personal", "academic", "work", "admission", "advanced", "other"];
 
 export function DynamicSchemaForm({
   fields,
@@ -90,15 +107,80 @@ export function DynamicSchemaForm({
   onTouch: (key: string) => void;
   variant?: "cards" | "flat";
 }) {
+  // Location Data State
+  const [countries, setCountries] = useState<Country[]>([]);
+  const [states, setStates] = useState<State[]>([]);
+  const [cities, setCities] = useState<City[]>([]);
+
+  // Loading States for Enterprise UX
+  const [countriesLoading, setCountriesLoading] = useState(false);
+  const [statesLoading, setStatesLoading] = useState(false);
+  const [citiesLoading, setCitiesLoading] = useState(false);
+
+  // Load Countries on Mount
+  useEffect(() => {
+    setCountriesLoading(true);
+    getCountries()
+      .then(setCountries)
+      .catch(console.error)
+      .finally(() => setCountriesLoading(false));
+  }, []);
+
+  // Load States when Country Changes
+  useEffect(() => {
+    const countryCode = values.profile?.country;
+    if (countryCode) {
+      setStatesLoading(true);
+      getStates(countryCode)
+        .then(setStates)
+        .catch(console.error)
+        .finally(() => setStatesLoading(false));
+    } else {
+      setStates([]);
+    }
+  }, [values.profile?.country]);
+
+  // Load Cities when State Changes
+  useEffect(() => {
+    const stateCode = values.profile?.state;
+    if (stateCode && states.length > 0) {
+        // API requires State NAME (label) for city lookup, but we store State CODE (value)
+        const stateObj = states.find(s => s.value === stateCode);
+        if (stateObj) {
+            setCitiesLoading(true);
+            getCities(stateObj.label)
+              .then(setCities)
+              .catch(console.error)
+              .finally(() => setCitiesLoading(false));
+        }
+    } else {
+        setCities([]);
+    }
+  }, [values.profile?.state, states]);
+
   const choiceOptionsByKey = useMemo(() => {
     const map: Record<string, Array<{ id: string | number; name: string }>> = {};
     for (const f of fields) {
-      if (f.type === "CHOICE") {
+      if (f.type === "CHOICE" && !["profile.country", "profile.state", "profile.city"].includes(f.key)) {
         map[f.key] = normalizeChoiceOptions(f.options);
       }
     }
     return map;
   }, [fields]);
+
+  useEffect(() => {
+    // Set default for country_code if not set
+    if (values.profile && !values.profile["country_code"]) {
+       // Check if field exists and has +91 option
+       const field = fields.find(f => f.key === "profile.country_code");
+       if (field && field.options) {
+          const opts = normalizeChoiceOptions(field.options);
+          if (opts.some(o => o.name === "+91" || o.id === "+91")) {
+             setProfile("country_code", "+91");
+          }
+       }
+    }
+  }, [fields, values.profile]);
 
   const setTop = (key: "first_name" | "last_name", value: string) => {
     onChange({ ...values, [key]: value });
@@ -113,13 +195,30 @@ export function DynamicSchemaForm({
   };
 
   const renderField = (f: PublicSchemaField) => {
+    // Conditional Logic for Work Section
+    const sectionId = getSectionId(f);
+    if (sectionId === "work") {
+      const workingStatus = values.profile["working_status"];
+      const k = f.key;
+      // "Are you currently working?" == YES : Show fields starting with profile.professional_profile.current_employment_details...
+      if (k.includes("professional_profile.current_employment_details") && workingStatus !== "YES") return null;
+      // "Are you currently working?" == NO : Show fields starting with profile.professional_profile.fresher_readiness_profile...
+      if (k.includes("professional_profile.fresher_readiness_profile") && workingStatus !== "NO") return null;
+    }
+
     const isTop = f.key === "first_name" || f.key === "last_name";
     const isProfile = f.key.startsWith("profile.");
     const profileKey = isProfile ? f.key.slice("profile.".length) : null;
-    const label = labelForKey(f.key);
+    const label = labelForKey(f.key, f.label);
     const err = (showErrors || touched[f.key]) ? errors[f.key] : "";
     const markTouched = () => onTouch(f.key);
     const keyLower = String(f.key || "").toLowerCase();
+
+    // Disable logic for cascading fields
+    let isFieldDisabled = disabled;
+    if (f.key === "profile.state" && !values.profile["country"]) isFieldDisabled = true;
+    if (f.key === "profile.city" && !values.profile["state"]) isFieldDisabled = true;
+    if (f.key === "profile.country_code" && !values.profile["country"]) isFieldDisabled = true;
 
     const commonLabel = (
       <label className="block text-sm font-medium text-[#1A1D1F] mb-2">
@@ -137,7 +236,7 @@ export function DynamicSchemaForm({
           {commonLabel}
           <input
             value={v}
-            disabled={disabled}
+            disabled={isFieldDisabled}
             onBlur={markTouched}
             onChange={(e) => {
               markTouched();
@@ -156,18 +255,30 @@ export function DynamicSchemaForm({
 
     if (f.type === "NUMBER") {
       const v = isProfile ? values.profile[profileKey!] : isTop ? (f.key === "first_name" ? values.first_name : values.last_name) : "";
+      
+      // Strict numeric validation for phone numbers
+      const isPhone = keyLower.includes("phone") || keyLower.includes("mobile");
+
       return (
         <div key={f.key}>
           {commonLabel}
           <input
-            type="number"
+            type={isPhone ? "tel" : "number"}
             value={typeof v === "number" ? String(v) : String(v ?? "")}
-            disabled={disabled}
+            disabled={isFieldDisabled}
             onBlur={markTouched}
             onChange={(e) => {
               markTouched();
-              const raw = e.target.value;
+              let raw = e.target.value;
+              
+              if (isPhone) {
+                // Enforce numeric only for phone
+                raw = raw.replace(/[^0-9]/g, "");
+              }
+
+              // Update state
               const next = raw === "" ? "" : Number(raw);
+              
               if (isProfile) setProfile(profileKey!, next);
             }}
             placeholder={`Enter ${label}`}
@@ -186,7 +297,7 @@ export function DynamicSchemaForm({
             <input
               type="checkbox"
               checked={checked}
-              disabled={disabled}
+              disabled={isFieldDisabled}
               onBlur={markTouched}
               onChange={(e) => {
                 markTouched();
@@ -214,7 +325,7 @@ export function DynamicSchemaForm({
           <input
             type="date"
             value={v}
-            disabled={disabled}
+            disabled={isFieldDisabled}
             onBlur={markTouched}
             onChange={(e) => {
               markTouched();
@@ -227,16 +338,76 @@ export function DynamicSchemaForm({
       );
     }
 
-    if (f.type === "CHOICE") {
-      const opts = choiceOptionsByKey[f.key] || [];
+    // New API Driven Location Logic (Replaces API_DROPDOWN block)
+    if (f.type === "API_DROPDOWN" || ["profile.country", "profile.state", "profile.city"].includes(f.key)) {
+      let opts: Array<{ id: string | number; name: string; extra?: any }> = [];
       const current = isProfile ? values.profile[profileKey!] : "";
+      let isLoading = false;
+
+      if (f.key === "profile.country") {
+          opts = countries.map(c => ({ id: c.value, name: c.label, extra: c }));
+          isLoading = countriesLoading;
+      } else if (f.key === "profile.state") {
+          opts = states.map(s => ({ id: s.value, name: s.label, extra: s }));
+          isLoading = statesLoading;
+      } else if (f.key === "profile.city") {
+          opts = cities.map(c => ({ id: c.value, name: c.label, extra: c }));
+          isLoading = citiesLoading;
+      }
+
       return (
         <div key={f.key}>
           {commonLabel}
           <SearchableSelect
             options={opts}
             value={typeof current === "undefined" || current === null ? "" : current}
-            disabled={disabled}
+            disabled={isFieldDisabled}
+            isLoading={isLoading}
+            onChange={(v) => {
+              markTouched();
+              if (isProfile) {
+                setProfile(profileKey!, v);
+
+                // Find the full option object here since SearchableSelect only passes value
+                const selectedOption = opts.find(o => o.id === v);
+
+                // Cascading Logic
+                if (f.key === "profile.country") {
+                   setProfile("state", "");
+                   setProfile("city", "");
+                   // Auto-fill phone code from Country data
+                   if (selectedOption?.extra) {
+                      const c = selectedOption.extra as Country;
+                      if (c.phone_code) {
+                          // Ensure + prefix if missing
+                          const code = c.phone_code.startsWith("+") ? c.phone_code : "+" + c.phone_code;
+                          setProfile("country_code", code);
+                      }
+                   }
+                } else if (f.key === "profile.state") {
+                   setProfile("city", "");
+                }
+              }
+            }}
+            placeholder={`Select ${label}`}
+            emptyMessage={f.key === "profile.city" && !values.profile["state"] ? "Please select a state first" : "No options found"}
+          />
+          {commonError}
+        </div>
+      );
+    }
+
+    if (f.type === "CHOICE" && !["profile.country", "profile.state", "profile.city"].includes(f.key)) {
+      const opts = choiceOptionsByKey[f.key] || [];
+      const current = isProfile ? values.profile[profileKey!] : "";
+
+      return (
+        <div key={f.key}>
+          {commonLabel}
+          <SearchableSelect
+            options={opts}
+            value={typeof current === "undefined" || current === null ? "" : current}
+            disabled={isFieldDisabled}
             onChange={(v) => {
               markTouched();
               if (isProfile) setProfile(profileKey!, v);
@@ -257,7 +428,7 @@ export function DynamicSchemaForm({
           {commonLabel}
           <textarea
             value={raw}
-            disabled={disabled}
+            disabled={isFieldDisabled}
             onBlur={markTouched}
             onChange={(e) => {
               markTouched();
@@ -278,11 +449,9 @@ export function DynamicSchemaForm({
   const grouped = useMemo(() => {
     const by: Record<SectionId, PublicSchemaField[]> = {
       personal: [],
-      contact: [],
-      address: [],
-      course: [],
-      education: [],
+      academic: [],
       work: [],
+      admission: [],
       advanced: [],
       other: [],
     };

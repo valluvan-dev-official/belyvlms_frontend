@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useLocation } from 'react-router-dom';
 import { Bell, Menu, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Sidebar } from '../components/Sidebar';
@@ -15,10 +14,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
-  const location = useLocation();
-
-  // Only show ProfileWidget on overview/dashboard pages
-  const shouldShowProfileWidget = location.pathname === '/dashboard' || location.pathname === '/admin/dashboard';
 
   return (
     <div className="flex h-screen bg-[#FAFAFA] overflow-hidden">
@@ -77,11 +72,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       </main>
 
       {/* Right Profile Panel - Desktop */}
-      {shouldShowProfileWidget && (
-        <div className="hidden xl:block">
-          <RightSidebar isOpen={showProfile} onClose={() => setShowProfile(false)} />
-        </div>
-      )}
+      <div className="hidden xl:block">
+        <RightSidebar isOpen={showProfile} onClose={() => setShowProfile(false)} />
+      </div>
 
       {/* Right Profile Panel - Mobile/Tablet Overlay */}
       {showProfile && (

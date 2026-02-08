@@ -58,7 +58,7 @@ export interface PaginatedResult<T> {
   results: T[];
 }
 
-export type SchemaFieldType = "TEXT" | "NUMBER" | "BOOLEAN" | "DATE" | "CHOICE" | "JSON";
+export type SchemaFieldType = "TEXT" | "NUMBER" | "BOOLEAN" | "DATE" | "CHOICE" | "JSON" | "API_DROPDOWN";
 
 export type SchemaChoiceOption =
   | string
@@ -68,9 +68,13 @@ export type SchemaChoiceOption =
 
 export interface PublicSchemaField {
   key: string;
+  label?: string;
+  section?: string;
   type: SchemaFieldType;
   required: boolean;
   options?: SchemaChoiceOption[];
+  api_url?: string;
+  depends_on?: string;
 }
 
 export interface PublicOnboardSchemaResponse {

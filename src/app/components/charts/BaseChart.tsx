@@ -68,7 +68,7 @@ export function BaseChart({
         padding: [10, 15],
         extraCssText: 'box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); border-radius: 8px;',
       },
-      grid: { top: 40, right: 20, bottom: 20, left: 20, containLabel: true },
+      grid: { top: 40, right: 20, bottom: 40, left: 50 },
     };
 
     const finalOptions = echarts.util.merge(defaultOptions, options);

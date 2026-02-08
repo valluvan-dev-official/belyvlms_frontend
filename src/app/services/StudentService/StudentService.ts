@@ -179,7 +179,11 @@ export const getStudents = async (filters: StudentFilters = {}): Promise<Student
 
     const response = await api.get<StudentListResponse>(`${ENDPOINT}?${params.toString()}`);
     return response.data;
-  } catch (error) {
+  } catch (error: any) {
+    if (error.response && error.response.status === 403) {
+       console.warn("Access denied to fetch students (403). Returning empty list.");
+       return { count: 0, next: null, previous: null, results: [] };
+    }
     console.error("Failed to fetch students", error);
     throw error;
   }

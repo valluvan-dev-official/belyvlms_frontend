@@ -15,12 +15,25 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { getStudents, getStudentStats, Student, StudentFilters, StudentStats } from '../services/StudentService/StudentService';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { StudentProfileModal } from '../components/StudentProfileModal';
 import { BaseChart } from '../components/charts/BaseChart';
 import { CHART_COLORS } from '../components/charts/chartConfig';
+import { PermissionGuard } from '../components/PermissionGuard';
+import { PERMISSIONS } from '../config/permissions';
+import { useAuth } from '../context/AuthContext';
 
 export function StudentsPage() {
+  const navigate = useNavigate();
+  const { hasPermission } = useAuth();
+
+  useEffect(() => {
+    if (!hasPermission(PERMISSIONS.STUDENT_MANAGEMENT_VIEW)) {
+      navigate('/dashboard');
+    }
+  }, [hasPermission, navigate]);
+
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [loading, setLoading] = useState(true);
@@ -38,6 +51,7 @@ export function StudentsPage() {
 
   // Fetch static stats (once)
   useEffect(() => {
+    if (!hasPermission(PERMISSIONS.STUDENT_MANAGEMENT_STATS_VIEW)) return;
     const loadStats = async () => {
       const data = await getStudentStats();
       setStats(data);
@@ -47,6 +61,13 @@ export function StudentsPage() {
 
   // Fetch students (filtered)
   const fetchStudents = async () => {
+    if (!hasPermission(PERMISSIONS.STUDENT_MANAGEMENT_VIEW)) {
+      setStudents([]);
+      setTotalCount(0);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
       const data = await getStudents({ ...filters, page: currentPage });
@@ -61,7 +82,7 @@ export function StudentsPage() {
 
   useEffect(() => {
     fetchStudents();
-  }, [currentPage, filters.search, filters.course_status, filters.location, filters.mode_of_class]);
+  }, [currentPage, filters.search, filters.course_status, filters.location, filters.mode_of_class, hasPermission]);
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFilters(prev => ({ ...prev, search: e.target.value }));
@@ -118,14 +139,17 @@ export function StudentsPage() {
           <p className="text-[#6E7191] text-sm mt-1">Manage and monitor all student records</p>
         </div>
         <div className="flex gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-[#E0E0E2] rounded-xl text-[#1A1D1F] font-medium hover:bg-[#F7F7F8] transition-colors">
-            <Download size={20} />
-            <span>Export</span>
-          </button>
+          <PermissionGuard permission={PERMISSIONS.STUDENT_MANAGEMENT_EXPORT}>
+            <button className="flex items-center gap-2 px-4 py-2 bg-white border border-[#E0E0E2] rounded-xl text-[#1A1D1F] font-medium hover:bg-[#F7F7F8] transition-colors">
+              <Download size={20} />
+              <span>Export</span>
+            </button>
+          </PermissionGuard>
         </div>
       </div>
 
       {/* Stats Cards */}
+      <PermissionGuard permission={PERMISSIONS.STUDENT_MANAGEMENT_STATS_VIEW}>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Total Students & Status Grid - Merged */}
         <div className="md:col-span-2 bg-white p-6 rounded-2xl border border-[#F5F5F7] shadow-sm flex flex-col md:flex-row gap-8">
@@ -231,6 +255,7 @@ export function StudentsPage() {
            </div>
         </div>
       </div>
+      </PermissionGuard>
 
       {/* Filters & Search */}
       <div className="bg-white p-4 rounded-2xl border border-[#F5F5F7] shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between">
@@ -313,7 +338,11 @@ export function StudentsPage() {
                   <tr 
                     key={student.id} 
                     className="hover:bg-[#FAFAFA] transition-colors cursor-pointer"
-                    onClick={() => setSelectedStudent(student)}
+                    onClick={() => {
+                      if (hasPermission(PERMISSIONS.STUDENT_MANAGEMENT_PROFILE_VIEW)) {
+                        setSelectedStudent(student);
+                      }
+                    }}
                   >
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-3">

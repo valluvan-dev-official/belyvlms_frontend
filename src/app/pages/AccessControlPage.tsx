@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   Shield, 
@@ -15,19 +15,72 @@ import {
   AlertCircle
 } from 'lucide-react';
 import AccessControlService, { Role, Permission, PermissionMatrix } from '../services/AccessControlService/AccessControlService';
+import { useAuth } from '../context/AuthContext';
+import { PermissionGuard } from '../components/PermissionGuard';
+import { PERMISSIONS, ACCESS_CONTROL_MATRIX_CONFIG } from '../config/permissions';
+import { NoAccess } from '../components/NoAccess';
 
 export function AccessControlPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [activeTab, setActiveTab] = useState<'matrix' | 'roles' | 'permissions'>('matrix');
 
+  // Live Permission Checks
+  const { activeRole, hasPermission } = useAuth();
+
+  // Super Admin Check
+  const isSuperAdmin = activeRole?.name?.toLowerCase().includes('super admin');
+
+  // Page Level Access Check - STRICT CONTAINER PATTERN
+  // No single "Gateway" permission. Content is permission-driven.
+  const canViewMatrix = isSuperAdmin || hasPermission(PERMISSIONS.ACCESS_CONTROL_MATRIX_VIEW);
+  const canViewRoles = isSuperAdmin || hasPermission(PERMISSIONS.ROLE_VIEW);
+  const canViewLibrary = isSuperAdmin || hasPermission(PERMISSIONS.PERMISSION_LIBRARY_VIEW);
+
+  // If user has NO access to any tab, show NoAccess page
+  const hasAnyAccess = canViewMatrix || canViewRoles || canViewLibrary;
+
+  if (!hasAnyAccess) {
+    return <NoAccess />;
+  }
+
+  // Permission Library Specific Permissions
+  const canCreatePermission = isSuperAdmin || hasPermission(PERMISSIONS.PERMISSION_LIBRARY_CREATE);
+  const canUpdatePermission = isSuperAdmin || hasPermission(PERMISSIONS.PERMISSION_LIBRARY_UPDATE);
+  const canDeletePermission = isSuperAdmin || hasPermission(PERMISSIONS.PERMISSION_LIBRARY_DELETE);
+  
+  // Role Management Specific Permissions
+  const canCreateRole = isSuperAdmin || hasPermission(PERMISSIONS.ROLE_CREATE);
+  const canUpdateRole = isSuperAdmin || hasPermission(PERMISSIONS.ROLE_UPDATE);
+  const canDeleteRole = isSuperAdmin || hasPermission(PERMISSIONS.ROLE_DELETE);
+
+  // Matrix Specific Permissions
+  const canEditMatrix = isSuperAdmin || hasPermission(PERMISSIONS.ACCESS_CONTROL_MATRIX_EDIT);
+
+  // Tab Visibility Logic - STRICT
+  const canAccessMatrixTab = canViewMatrix;
+  const canAccessRolesTab = canViewRoles;
+  const canAccessLibraryTab = canViewLibrary; // Strict: Action permissions do NOT grant view access
+  
   useEffect(() => {
+    // Set default active tab based on permissions
     const searchParams = new URLSearchParams(location.search);
     const tab = searchParams.get('tab');
-    if (tab && ['matrix', 'roles', 'permissions'].includes(tab)) {
-      setActiveTab(tab as any);
+    
+    // Validate requested tab against permissions
+    if (tab === 'matrix' && canAccessMatrixTab) {
+        setActiveTab('matrix');
+    } else if (tab === 'roles' && canAccessRolesTab) {
+        setActiveTab('roles');
+    } else if (tab === 'permissions' && canAccessLibraryTab) {
+        setActiveTab('permissions');
+    } else {
+        // Default to first available tab
+        if (canAccessMatrixTab) setActiveTab('matrix');
+        else if (canAccessRolesTab) setActiveTab('roles');
+        else if (canAccessLibraryTab) setActiveTab('permissions');
     }
-  }, [location.search]);
+  }, [location.search, canAccessMatrixTab, canAccessRolesTab, canAccessLibraryTab]);
 
   const handleTabChange = (tab: 'matrix' | 'roles' | 'permissions') => {
     setActiveTab(tab);
@@ -56,57 +109,82 @@ export function AccessControlPage() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [roleToDelete, setRoleToDelete] = useState<Role | null>(null);
 
-  // Load Data on Mount
+  // Load Data on Mount - PERMISSION AWARE
   useEffect(() => {
     const loadData = async () => {
       try {
         setIsLoading(true);
-        const [fetchedRoles, fetchedPermissions] = await Promise.all([
-          AccessControlService.getRoles(),
-          AccessControlService.getPermissions()
-        ]);
+        
+        // 1. Fetch Roles - Required for Matrix and Role Management
+        // STRICT: Only if user has access to Matrix or Roles
+        let fetchedRoles: Role[] = [];
+        if (canAccessMatrixTab || canAccessRolesTab) {
+             fetchedRoles = await AccessControlService.getRoles();
+             setRoles(fetchedRoles.sort((a, b) => {
+              // Custom sort: Super Admin first, then Admin, then others
+              const getPriority = (roleName: string) => {
+                const name = roleName.toLowerCase();
+                if (name.includes('super admin')) return 0;
+                if (name === 'admin' || name === 'administrator') return 1;
+                return 2;
+              };
+              return getPriority(a.name) - getPriority(b.name);
+            }));
+        }
 
-        setRoles(fetchedRoles.sort((a, b) => {
-          // Custom sort: Super Admin first, then Admin, then others
-          const getPriority = (roleName: string) => {
-            const name = roleName.toLowerCase();
-            if (name.includes('super admin')) return 0;
-            if (name === 'admin' || name === 'administrator') return 1;
-            return 2;
-          };
-          return getPriority(a.name) - getPriority(b.name);
-        }));
-        setPermissions(fetchedPermissions);
+        // 2. Fetch Permissions - Required for Matrix and Library
+        // STRICT: Only if user has access to Matrix or Library
+        let fetchedPermissions: Permission[] = [];
+        if (canAccessMatrixTab || canAccessLibraryTab) {
+            fetchedPermissions = await AccessControlService.getPermissions();
+            setPermissions(fetchedPermissions);
+        }
 
-        // Build Matrix
-        const matrix: PermissionMatrix = {};
-        fetchedRoles.forEach(role => {
-          matrix[role.id] = {};
-          fetchedPermissions.forEach(perm => {
-            // Super Admin always has all permissions
-            if (role.name.toLowerCase().includes('super admin')) {
-              matrix[role.id][perm.id] = true;
-            } else {
-              matrix[role.id][perm.id] = false;
-            }
-          });
-        });
+        // 3. Build Matrix - Only if Matrix View is allowed
+        if (canAccessMatrixTab) {
+            const matrix: PermissionMatrix = {};
+            fetchedRoles.forEach(role => {
+              matrix[role.id] = {};
+              fetchedPermissions.forEach(perm => {
+                // Super Admin always has all permissions
+                if (role.name.toLowerCase().includes('super admin')) {
+                  matrix[role.id][perm.id] = true;
+                } else {
+                  matrix[role.id][perm.id] = false;
+                }
+              });
+            });
 
-        // Fetch existing assignments for each role
-        await Promise.all(fetchedRoles.map(async (role) => {
-          // Skip fetching for Super Admin as we assume full access
-          if (role.name.toLowerCase().includes('super admin')) return;
-          
-          const assignedCodes = await AccessControlService.getRolePermissions(role.id);
-          assignedCodes.forEach(code => {
-            if (matrix[role.id][code] !== undefined) {
-              matrix[role.id][code] = true;
-            }
-          });
-        }));
+            // Ensure all permissions from ACCESS_CONTROL_MATRIX_CONFIG are present in the matrix
+            ACCESS_CONTROL_MATRIX_CONFIG.forEach(group => {
+              group.permissions.forEach(perm => {
+                fetchedRoles.forEach(role => {
+                   if (matrix[role.id][perm.code] === undefined) {
+                     // Initialize if missing
+                     const isSuperAdmin = role.name.toLowerCase().includes('super admin');
+                     matrix[role.id][perm.code] = isSuperAdmin; 
+                   }
+                });
+              });
+            });
 
-        setPermissionMatrix(matrix);
-        setOriginalMatrix(JSON.parse(JSON.stringify(matrix)));
+            // Fetch existing assignments for each role
+            await Promise.all(fetchedRoles.map(async (role) => {
+              // Skip fetching for Super Admin as we assume full access
+              if (role.name.toLowerCase().includes('super admin')) return;
+              
+              const assignedCodes = await AccessControlService.getRolePermissions(role.id);
+              assignedCodes.forEach(code => {
+                if (matrix[role.id][code] !== undefined) {
+                  matrix[role.id][code] = true;
+                }
+              });
+            }));
+
+            setPermissionMatrix(matrix);
+            setOriginalMatrix(JSON.parse(JSON.stringify(matrix)));
+        }
+
         setIsLoading(false);
       } catch (error) {
         console.error("Failed to load access control data", error);
@@ -115,7 +193,7 @@ export function AccessControlPage() {
     };
 
     loadData();
-  }, []);
+  }, [canAccessMatrixTab, canAccessRolesTab, canAccessLibraryTab]);
 
   // Measure table width for top scrollbar
   useEffect(() => {
@@ -162,14 +240,46 @@ export function AccessControlPage() {
     };
   }, [activeTab, isLoading]);
 
-  const togglePermission = (roleId: string, permissionId: string) => {
-    setPermissionMatrix(prev => ({
-      ...prev,
-      [roleId]: {
-        ...prev[roleId],
-        [permissionId]: !prev[roleId][permissionId]
+  const togglePermission = (roleId: string, permissionCode: string) => {
+    // Find the module this permission belongs to
+    const moduleConfig = ACCESS_CONTROL_MATRIX_CONFIG.find(m => 
+      m.permissions.some(p => p.code === permissionCode)
+    );
+
+    if (!moduleConfig) return;
+
+    // Identify the VIEW permission (First permission in the group is always the Gateway/View permission)
+    const viewPermission = moduleConfig.permissions[0];
+    const isViewPermission = viewPermission.code === permissionCode;
+
+    setPermissionMatrix(prev => {
+      const rolePermissions = { ...prev[roleId] };
+      const currentVal = rolePermissions[permissionCode];
+      const newVal = !currentVal;
+
+      // Apply change
+      rolePermissions[permissionCode] = newVal;
+
+      // RULE: If VIEW is unchecked -> Uncheck ALL other permissions in this module
+      if (isViewPermission && newVal === false) {
+        moduleConfig.permissions.forEach(p => {
+          if (p.code !== permissionCode) {
+             rolePermissions[p.code] = false;
+          }
+        });
       }
-    }));
+
+      // RULE: If any ACTION is checked -> Automatically check VIEW
+      if (!isViewPermission && newVal === true) {
+         rolePermissions[viewPermission.code] = true;
+      }
+
+      return {
+        ...prev,
+        [roleId]: rolePermissions
+      };
+    });
+    
     setHasUnsavedChanges(true);
   };
 
@@ -258,13 +368,27 @@ export function AccessControlPage() {
   };
 
 
-  const groupedPermissions = permissions.reduce((acc, permission) => {
-    if (!acc[permission.module]) {
-      acc[permission.module] = [];
-    }
-    acc[permission.module].push(permission);
-    return acc;
-  }, {} as Record<string, Permission[]>);
+  // No longer using groupedPermissions derived from API data for Matrix
+  // Matrix UI is now strictly driven by ACCESS_CONTROL_MATRIX_CONFIG
+  
+  // Group permissions by module for the library view
+  const groupedPermissions = useMemo(() => {
+    const groups: Record<string, Permission[]> = {};
+    permissions.forEach(p => {
+      const module = p.module || 'Other';
+      if (!groups[module]) {
+        groups[module] = [];
+      }
+      groups[module].push(p);
+    });
+    // Sort modules alphabetically
+    return Object.keys(groups).sort().reduce((acc, key) => {
+        acc[key] = groups[key];
+        return acc;
+    }, {} as Record<string, Permission[]>);
+  }, [permissions]);
+
+  // const getPermissionTooltip - REMOVED (now defined in ACCESS_CONTROL_MATRIX_CONFIG)
 
   if (isLoading) {
     return (
@@ -294,55 +418,65 @@ export function AccessControlPage() {
               <AlertCircle size={16} />
               Unsaved changes
             </span>
-            <button 
-              onClick={cancelChanges}
-              className="px-4 py-2 text-sm font-medium text-[#6E7191] bg-white border border-[#E0E0E2] rounded-xl hover:bg-[#F7F7F8] transition-colors"
-            >
-              Cancel
-            </button>
-            <button 
-              onClick={saveChanges}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#4ECDC4] rounded-xl hover:bg-[#44A08D] shadow-lg shadow-[#4ECDC4]/20 transition-all"
-            >
-              <Save size={16} />
-              Save Changes
-            </button>
+            <PermissionGuard permission={PERMISSIONS.ACCESS_CONTROL_MATRIX_EDIT}>
+              <button 
+                onClick={cancelChanges}
+                className="px-4 py-2 text-sm font-medium text-[#6E7191] bg-white border border-[#E0E0E2] rounded-xl hover:bg-[#F7F7F8] transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={saveChanges}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#4ECDC4] rounded-xl hover:bg-[#44A08D] shadow-lg shadow-[#4ECDC4]/20 transition-all"
+              >
+                <Save size={16} />
+                Save Changes
+              </button>
+            </PermissionGuard>
           </div>
         )}
       </div>
 
-      {/* Navigation Tabs */}
-      <div className="flex items-center gap-6 mb-8">
-        <button
-          onClick={() => handleTabChange('matrix')}
-          className={`px-6 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-            activeTab === 'matrix' 
-              ? 'bg-white text-[#1A1D1F] shadow-sm border border-[#E0E0E2]' 
-              : 'text-[#6E7191] hover:text-[#1A1D1F] hover:bg-[#F7F7F8]'
-          }`}
-        >
-          Matrix View
-        </button>
-        <button
-          onClick={() => handleTabChange('roles')}
-          className={`px-6 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-            activeTab === 'roles' 
-              ? 'bg-white text-[#1A1D1F] shadow-sm border border-[#E0E0E2]' 
-              : 'text-[#6E7191] hover:text-[#1A1D1F] hover:bg-[#F7F7F8]'
-          }`}
-        >
-          Role Management
-        </button>
-        <button
-          onClick={() => handleTabChange('permissions')}
-          className={`px-6 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-            activeTab === 'permissions' 
-              ? 'bg-white text-[#1A1D1F] shadow-sm border border-[#E0E0E2]' 
-              : 'text-[#6E7191] hover:text-[#1A1D1F] hover:bg-[#F7F7F8]'
-          }`}
-        >
-          Permission Library
-        </button>
+      {/* Tab Navigation */}
+      <div className="flex items-center gap-2 p-1 bg-[#F7F7F8] rounded-2xl w-fit border border-[#E0E0E2]">
+        {canAccessMatrixTab && (
+          <button
+            onClick={() => handleTabChange('matrix')}
+            className={`px-6 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+              activeTab === 'matrix' 
+                ? 'bg-white text-[#1A1D1F] shadow-sm border border-[#E0E0E2]' 
+                : 'text-[#6E7191] hover:text-[#1A1D1F] hover:bg-[#F7F7F8]'
+            }`}
+          >
+            View Matrix
+          </button>
+        )}
+        
+        {canAccessRolesTab && (
+          <button
+            onClick={() => handleTabChange('roles')}
+            className={`px-6 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+              activeTab === 'roles' 
+                ? 'bg-white text-[#1A1D1F] shadow-sm border border-[#E0E0E2]' 
+                : 'text-[#6E7191] hover:text-[#1A1D1F] hover:bg-[#F7F7F8]'
+            }`}
+          >
+            Role Management
+          </button>
+        )}
+
+        {canAccessLibraryTab && (
+          <button
+            onClick={() => handleTabChange('permissions')}
+            className={`px-6 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+              activeTab === 'permissions' 
+                ? 'bg-white text-[#1A1D1F] shadow-sm border border-[#E0E0E2]' 
+                : 'text-[#6E7191] hover:text-[#1A1D1F] hover:bg-[#F7F7F8]'
+            }`}
+          >
+            Permission Library
+          </button>
+        )}
       </div>
 
       {/* Content Area */}
@@ -377,44 +511,44 @@ export function AccessControlPage() {
                     <th key={role.id} className="p-6 text-center min-w-[140px] align-top">
                       <div className="flex flex-col items-center gap-2">
                         <div 
-                          className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold shadow-sm"
+                          className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold shadow-sm"
                           style={{ backgroundColor: role.color }}
                         >
                           {role.code}
                         </div>
-                        <div className="flex flex-col items-center">
-                          <span className="text-sm font-bold text-[#1A1D1F]">{role.name}</span>
-                          <span className="text-xs text-[#6E7191] flex items-center gap-1">
-                            <Users size={12} />
-                            {role.userCount}
-                          </span>
-                        </div>
+                        <span className="text-sm font-bold text-[#1A1D1F] whitespace-nowrap">
+                          {role.name}
+                        </span>
+                        <span className="text-xs text-[#6E7191] bg-white px-2 py-0.5 rounded-md border border-[#E0E0E2]">
+                          {role.userCount || 0} users
+                        </span>
                       </div>
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#E0E0E2]">
-                {Object.entries(groupedPermissions).map(([module, modulePermissions]) => (
-                  <React.Fragment key={module}>
-                    <tr className="bg-white">
-                      <td className="p-4 px-6 border-b border-[#E0E0E2] md:sticky md:left-0 bg-white z-20 border-r border-[#E0E0E2]">
-                        <span className="text-sm font-bold text-[#4ECDC4]">
-                          {module}
-                        </span>
+              <tbody className="divide-y divide-[#F5F5F7]">
+                {ACCESS_CONTROL_MATRIX_CONFIG.map((module) => (
+                  <React.Fragment key={module.module}>
+                    {/* Module Header */}
+                    <tr className="bg-[#FAFAFB]">
+                      <td 
+                        colSpan={roles.length + 1} 
+                        className="p-4 pl-6 text-xs font-bold text-[#4ECDC4] uppercase tracking-wider border-b border-[#E0E0E2] md:sticky md:left-0 z-20"
+                      >
+                        {module.module}
                       </td>
-                      <td className="p-0 border-b border-[#E0E0E2]" colSpan={roles.length}></td>
                     </tr>
-                    {modulePermissions.map(permission => (
+                    
+                    {/* Permission Rows from Config */}
+                    {module.permissions.map(permission => (
                       <tr 
-                        key={permission.id} 
+                        key={permission.code} 
                         className="hover:bg-[#F9FAFB] transition-colors group border-b border-[#F5F5F7] last:border-none"
-                        onMouseEnter={() => setHoveredPermission(permission.id)}
-                        onMouseLeave={() => setHoveredPermission(null)}
                       >
                         <td className="p-6 py-4 md:sticky md:left-0 bg-white group-hover:bg-[#F9FAFB] z-20 border-r border-[#E0E0E2] border-opacity-50">
                           <div className="flex items-center gap-2">
-                            <p className="text-sm font-medium text-[#1A1D1F]">{permission.name}</p>
+                            <p className="text-sm font-medium text-[#1A1D1F]">{permission.label}</p>
                             {permission.description && (
                               <div className="group/tooltip relative flex items-center">
                                 <Info size={14} className="text-[#9A9EA6] cursor-help" />
@@ -428,19 +562,32 @@ export function AccessControlPage() {
                         </td>
                         {roles.map(role => {
                           const isSuperAdmin = role.name.toLowerCase().includes('super admin');
+                          const permCode = permission.code;
+                          const isAssigned = permissionMatrix[role.id]?.[permCode] || false;
+                          
                           return (
-                            <td key={`${role.id}-${permission.id}`} className="p-4 text-center min-w-[140px]">
-                              <button
-                                onClick={() => !isSuperAdmin && togglePermission(role.id, permission.id)}
-                                disabled={isSuperAdmin}
-                                className={`w-6 h-6 rounded flex items-center justify-center transition-all duration-200 mx-auto ${
-                                  permissionMatrix[role.id][permission.id]
-                                    ? 'bg-[#E11D48] text-white shadow-sm'
-                                    : 'bg-white border-2 border-[#E0E0E2] text-transparent hover:border-[#E11D48]'
-                                } ${isSuperAdmin ? 'opacity-50 cursor-not-allowed' : ''}`}
-                              >
-                                <Check size={14} strokeWidth={4} className={`transition-transform duration-200 ${permissionMatrix[role.id][permission.id] ? 'scale-100' : 'scale-0'}`} />
-                              </button>
+                            <td key={`${role.id}-${permCode}`} className="p-4 text-center min-w-[140px]">
+                              <PermissionGuard permission={PERMISSIONS.ACCESS_CONTROL_MATRIX_EDIT} fallback={
+                                <div className={`w-6 h-6 rounded flex items-center justify-center mx-auto ${
+                                  isAssigned
+                                    ? 'bg-[#E11D48] text-white opacity-50'
+                                    : 'bg-white border-2 border-[#E0E0E2] text-transparent'
+                                }`}>
+                                   <Check size={14} strokeWidth={4} className={`transition-transform duration-200 ${isAssigned ? 'scale-100' : 'scale-0'}`} />
+                                </div>
+                              }>
+                                <button
+                                  onClick={() => !isSuperAdmin && togglePermission(role.id, permCode)}
+                                  disabled={isSuperAdmin}
+                                  className={`w-6 h-6 rounded flex items-center justify-center transition-all duration-200 mx-auto ${
+                                    isAssigned
+                                      ? 'bg-[#E11D48] text-white shadow-sm'
+                                      : 'bg-white border-2 border-[#E0E0E2] text-transparent hover:border-[#E11D48]'
+                                  } ${isSuperAdmin ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                >
+                                  <Check size={14} strokeWidth={4} className={`transition-transform duration-200 ${isAssigned ? 'scale-100' : 'scale-0'}`} />
+                                </button>
+                              </PermissionGuard>
                             </td>
                           );
                         })}
@@ -473,13 +620,15 @@ export function AccessControlPage() {
                 <span className="text-sm font-medium">Filters</span> 
               </button> 
             </div> 
-            <button 
-              onClick={openCreateRoleModal}
-              className="flex items-center gap-2 px-4 py-2.5 bg-[#4ECDC4] text-white rounded-xl hover:shadow-lg transition-all hover:bg-[#44A08D]"
-            >
-              <Plus size={18} />
-              <span className="text-sm font-medium">Create Role</span> 
-            </button> 
+            <PermissionGuard permission={PERMISSIONS.ROLE_CREATE}>
+              <button 
+                onClick={openCreateRoleModal}
+                className="flex items-center gap-2 px-4 py-2.5 bg-[#4ECDC4] text-white rounded-xl hover:shadow-lg transition-all hover:bg-[#44A08D]"
+              >
+                <Plus size={18} />
+                <span className="text-sm font-medium">Create Role</span> 
+              </button> 
+            </PermissionGuard>
           </div> 
 
           {/* Role Cards Grid */} 
@@ -497,19 +646,23 @@ export function AccessControlPage() {
                     {role.code} 
                   </div> 
                   <div className="flex items-center gap-1"> 
-                    <button 
-                      onClick={() => openEditRoleModal(role)}
-                      className="p-2 hover:bg-[#F7F7F8] rounded-lg transition-colors"
-                    > 
-                      <Edit size={16} className="text-[#6E7191]" /> 
-                    </button> 
-                    <button 
-                      onClick={() => confirmDeactivateRole(role)}
-                      className="p-2 text-[#6E7191] hover:text-[#FF3B3B] hover:bg-[#FFF5F5] rounded-lg transition-colors"
-                      title="Deactivate Role"
-                    >
-                      <Trash2 size={16} />
-                    </button> 
+                    <PermissionGuard permission={PERMISSIONS.ACCESS_CONTROL_ROLE_CREATE}>
+                      <button 
+                        onClick={() => openEditRoleModal(role)}
+                        className="p-2 hover:bg-[#F7F7F8] rounded-lg transition-colors"
+                      > 
+                        <Edit size={16} className="text-[#6E7191]" /> 
+                      </button> 
+                    </PermissionGuard>
+                    <PermissionGuard permission={PERMISSIONS.ACCESS_CONTROL_ROLE_DELETE}>
+                      <button 
+                        onClick={() => confirmDeactivateRole(role)}
+                        className="p-2 text-[#6E7191] hover:text-[#FF3B3B] hover:bg-[#FFF5F5] rounded-lg transition-colors"
+                        title="Deactivate Role"
+                      >
+                        <Trash2 size={16} />
+                      </button> 
+                    </PermissionGuard>
                   </div> 
                 </div> 
 
@@ -540,6 +693,14 @@ export function AccessControlPage() {
       {/* Permission Library Tab */} 
       {activeTab === 'permissions' && ( 
         <div className="p-6"> 
+          {/* Read Only Banner */}
+          {canViewLibrary && !canCreatePermission && !canUpdatePermission && !canDeletePermission && (
+             <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl flex items-center gap-3 text-blue-700 animate-in fade-in slide-in-from-top-2">
+               <Info size={20} className="shrink-0" />
+               <p className="font-medium">You have read-only access to the Permission Library.</p>
+             </div>
+          )}
+
           {/* Action Bar */} 
           <div className="flex items-center justify-between mb-8"> 
             <div className="flex items-center gap-3"> 
@@ -556,43 +717,72 @@ export function AccessControlPage() {
                 <span className="text-sm font-medium">Filters</span> 
               </button> 
             </div> 
-            <button className="flex items-center gap-2 px-6 py-2.5 bg-[#4ECDC4] text-white rounded-xl hover:shadow-lg transition-all hover:bg-[#44A08D]"> 
-              <Plus size={18} /> 
-              <span className="text-sm font-medium">Add Permission</span> 
-            </button> 
+            
+            {/* Create Button */}
+            {canCreatePermission && (
+              <button className="flex items-center gap-2 px-6 py-2.5 bg-[#4ECDC4] text-white rounded-xl hover:shadow-lg transition-all hover:bg-[#44A08D]"> 
+                <Plus size={18} /> 
+                <span className="text-sm font-medium">Add Permission</span> 
+              </button> 
+            )}
           </div> 
 
           {/* Permission List */} 
-          <div className="space-y-8"> 
-            {Object.entries(groupedPermissions).map(([module, perms]) => ( 
-              <div key={module}> 
-                <h3 className="font-bold text-[#4ECDC4] text-lg mb-4 pl-1">{module}</h3> 
-                <div className="space-y-3"> 
-                  {perms.map(permission => ( 
-                    <div 
-                      key={permission.id} 
-                      className="flex items-center justify-between p-6 bg-[#FAFAFB] rounded-2xl hover:bg-white hover:shadow-md border border-transparent hover:border-[#E0E0E2] transition-all group"
-                    >
-                      <div>
-                        <h4 className="font-bold text-[#1A1D1F] text-base mb-1">{permission.name}</h4>
-                        <p className="text-sm text-[#6E7191] mb-2">{permission.description}</p>
-                        <p className="text-xs text-[#9A9EA6]">ID: {permission.id}</p>
-                      </div>
-                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button className="p-2 hover:bg-[#E0E0E2] rounded-lg text-[#6E7191] transition-colors">
-                          <Edit size={18} />
-                        </button>
-                        <button className="p-2 hover:bg-[#FFF5F7] rounded-lg text-[#FF6B9D] transition-colors">
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+          {canViewLibrary ? (
+            <div className="space-y-8"> 
+              {Object.entries(groupedPermissions).map(([module, perms]) => ( 
+                <div key={module}> 
+                  <h3 className="font-bold text-[#4ECDC4] text-lg mb-4 pl-1">{module}</h3> 
+                  <div className="space-y-3"> 
+                    {perms.map(permission => ( 
+                      <div 
+                        key={permission.id} 
+                        className="flex items-center justify-between p-6 bg-[#FAFAFB] rounded-2xl hover:bg-white hover:shadow-md border border-transparent hover:border-[#E0E0E2] transition-all group"
+                      >
+                        <div>
+                          <h4 className="font-bold text-[#1A1D1F] text-base mb-1">{permission.name}</h4>
+                          <p className="text-sm text-[#6E7191] mb-2">{permission.description}</p>
+                          <p className="text-xs text-[#9A9EA6]">ID: {permission.id}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {/* Edit Action - Visible but disabled if no permission */}
+                          <button 
+                             disabled={!canUpdatePermission}
+                             className={`p-2 rounded-lg transition-colors ${
+                               canUpdatePermission 
+                                 ? 'text-[#6E7191] hover:bg-[#E0E0E2] cursor-pointer' 
+                                 : 'text-[#E0E0E2] cursor-not-allowed'
+                             }`}
+                             title={canUpdatePermission ? "Edit Permission" : "Read-only"}
+                          >
+                            <Edit size={18} />
+                          </button>
+                          
+                          {/* Delete Action - Hidden if no permission */}
+                          {canDeletePermission && (
+                              <button className="p-2 hover:bg-[#FFF5F5] hover:text-[#FF3B3B] rounded-lg text-[#6E7191] transition-colors">
+                                <Trash2 size={18} />
+                              </button>
+                          )}
+                        </div>
+                      </div> 
+                    ))} 
+                  </div> 
+                </div> 
+              ))} 
+            </div> 
+          ) : (
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                <Shield size={32} className="text-gray-400" />
               </div>
-            ))}
-          </div>
-        </div>
+              <h3 className="text-lg font-bold text-[#1A1D1F] mb-2">Access Restricted</h3>
+              <p className="text-[#6E7191] max-w-md">
+                You do not have permission to view the permission list. Please contact your administrator if you believe this is an error.
+              </p>
+            </div>
+          )}
+        </div> 
       )}
       </div>
       

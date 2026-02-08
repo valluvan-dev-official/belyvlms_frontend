@@ -27,6 +27,7 @@ export interface SearchableSelectProps {
   disabled?: boolean
   className?: string
   emptyMessage?: string
+  isLoading?: boolean
 }
 
 export function SearchableSelect({
@@ -36,7 +37,8 @@ export function SearchableSelect({
   placeholder = "Select...",
   disabled = false,
   className,
-  emptyMessage = "No results found."
+  emptyMessage = "No results found.",
+  isLoading = false
 }: SearchableSelectProps) {
   const [open, setOpen] = React.useState(false)
 
@@ -51,7 +53,7 @@ export function SearchableSelect({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          disabled={disabled}
+          disabled={disabled || isLoading}
           className={cn(
             "w-full justify-between bg-white border border-[#FBEAC4] rounded-xl text-sm font-normal text-left h-auto py-2.5 hover:bg-white hover:text-foreground",
             // Specific styling to match the user's existing input style in AddUserPage
@@ -61,9 +63,13 @@ export function SearchableSelect({
           )}
         >
           <span className="truncate">
-            {selectedOption ? selectedOption.name : placeholder}
+            {isLoading ? "Loading..." : (selectedOption ? selectedOption.name : placeholder)}
           </span>
-          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          {isLoading ? (
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-gray-600" />
+          ) : (
+            <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          )}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[280px] p-0 bg-white shadow-lg" align="start">

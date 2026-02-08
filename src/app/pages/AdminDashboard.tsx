@@ -14,7 +14,7 @@ import { CourseMetrics } from '../components/admin-dashboard/CourseMetrics';
 import { StudentInsights } from '../components/admin-dashboard/StudentInsights';
 import { TrainerInsights } from '../components/admin-dashboard/TrainerInsights';
 import { CourseInsights } from '../components/admin-dashboard/CourseInsights';
-import { QuickAccessTabs } from '../components/admin-dashboard/QuickAccessTabs';
+import { QuickAccessTabs } from '../components/dashboard/shared/QuickAccessTabs';
 
 import { Activity, Layout, TrendingUp } from 'lucide-react';
 

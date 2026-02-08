@@ -7,6 +7,8 @@ import {
   updateProfileConfig, 
   deleteProfileConfig 
 } from "../services/ProfileService/ProfileService";
+import { PERMISSIONS } from "../config/permissions";
+import { PermissionGuard } from "../components/PermissionGuard";
 import { Shield, Save, Trash2, AlertCircle, HelpCircle, Search, Home, ChevronRight, X, SlidersHorizontal, ArrowLeft, CheckCircle2 } from "lucide-react";
 import { Navigate, Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -215,20 +217,6 @@ export function ProfileConfigManager() {
   const canBeDedicated = (code: string) => {
     return code === "BTR" || code === "TRN";
   };
-
-  if (!isSAM) {
-    return (
-      <div className="p-8">
-        <div className="max-w-xl mx-auto bg-white rounded-2xl border border-[#E0E0E2] p-6 text-center shadow-sm">
-          <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-[#FFF4E6] flex items-center justify-center text-[#FF8A00]">
-            <Shield size={20} />
-          </div>
-          <h1 className="text-lg font-bold text-[#1A1D1F]">Access Restricted</h1>
-          <p className="text-sm text-[#6E7191] mt-2">Only SAM can manage role profile configs.</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="p-6 md:p-10 max-w-7xl mx-auto font-sans text-[#1A1D1F]">
@@ -532,14 +520,16 @@ export function ProfileConfigManager() {
                     {/* Footer Actions */}
                     <div className="px-8 py-6 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
                         {existingConfig ? (
-                            <button
-                                onClick={handleDelete}
-                                disabled={saving}
-                                className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors text-sm font-medium disabled:opacity-50"
-                            >
-                                <Trash2 size={16} />
-                                Delete Configuration
-                            </button>
+                            <PermissionGuard permission={PERMISSIONS.ACCESS_CONTROL_ROLE_DELETE}>
+                                <button
+                                    onClick={handleDelete}
+                                    disabled={saving}
+                                    className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors text-sm font-medium disabled:opacity-50"
+                                >
+                                    <Trash2 size={16} />
+                                    Delete Configuration
+                                </button>
+                            </PermissionGuard>
                         ) : (
                             <div></div>
                         )}
@@ -551,18 +541,20 @@ export function ProfileConfigManager() {
                             >
                                 Cancel
                             </button>
-                            <button
-                                onClick={handleSave}
-                                disabled={saving}
-                                className="px-6 py-2 bg-[#1A1D1F] text-white rounded-lg font-medium text-sm hover:bg-gray-800 transition-colors flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed shadow-sm"
-                            >
-                                {saving ? (
-                                    <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
-                                ) : (
-                                    <Save size={16} />
-                                )}
-                                Save Changes
-                            </button>
+                            <PermissionGuard permission={PERMISSIONS.ACCESS_CONTROL_ROLE_CREATE}>
+                                <button
+                                    onClick={handleSave}
+                                    disabled={saving}
+                                    className="px-6 py-2 bg-[#1A1D1F] text-white rounded-lg font-medium text-sm hover:bg-gray-800 transition-colors flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed shadow-sm"
+                                >
+                                    {saving ? (
+                                        <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
+                                    ) : (
+                                        <Save size={16} />
+                                    )}
+                                    Save Changes
+                                </button>
+                            </PermissionGuard>
                         </div>
                     </div>
                 </div>

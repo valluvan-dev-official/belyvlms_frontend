@@ -1,4 +1,4 @@
-import { api, getCurrentUser } from "../AuthenticationService/AuthenticationService";
+import { api, getCurrentUser, getMe } from "../AuthenticationService/AuthenticationService";
 
 export interface UserProfile {
   id: number;
@@ -23,20 +23,41 @@ export interface UserListItem {
 
 /**
  * Fetch the current user's profile data
- * GET /api/user/me/
+ * GET /api/rbac/auth/me/ (Unified Auth Context)
+ * 
+ * NOTE: This function now uses the centralized AuthenticationService.getMe() 
+ * to ensure that the user data in localStorage is updated (cached) 
+ * whenever the profile is fetched. This satisfies the requirement to 
+ * "store the data ... in local storage and work on with it".
  */
 export const getMyProfile = async (): Promise<UserProfile> => {
   try {
-    const response = await api.get<UserProfile>("user/me/");
-    console.log("✅ Profile API Response Status:", response.status);
-    console.log("📦 Profile API Response Data:", response.data);
-    return response.data;
+    // 1. Check if we have local data first (Optimistic)
+    // Optional: We could return local data immediately if we wanted to avoid the call.
+    // But getMe() handles fetching fresh data and updating storage.
+    
+    // 2. Fetch fresh data using centralized Auth Service (which updates localStorage)
+    const userData = await getMe();
+    
+    console.log("✅ Profile Data Synced via Auth Service");
+    
+    // 3. Map Unified Auth Context to UserProfile
+    return {
+      id: Number(userData.user.id),
+      email: userData.user.email,
+      name: userData.user.name,
+      role: userData.role?.name || "User",
+      profile_picture: null, // Backend may add this later
+      is_active: true, // Implied by successful auth
+      is_staff: false, // Not exposed in RBAC context yet
+      is_superuser: false // Not exposed in RBAC context yet
+    };
   } catch (error: any) {
     console.error("❌ Profile API Error:", error);
     
-    // FALLBACK logic
+    // FALLBACK logic (Read from Local Storage)
     if (error.response?.status === 404 || error.code === "ERR_NETWORK") {
-      console.warn("⚠️ Endpoint not found. Falling back to local user data.");
+      console.warn("⚠️ Endpoint not found or Network Error. Falling back to local user data.");
       const localUser = getCurrentUser();
       
       if (localUser && localUser.user) {
@@ -56,6 +77,7 @@ export const getMyProfile = async (): Promise<UserProfile> => {
     throw error;
   }
 };
+
 
 /**
  * Update the current user's profile data
@@ -88,7 +110,11 @@ export const getAllUsers = async (): Promise<UserListItem[]> => {
   try {
       const response = await api.get<UserListItem[]>("profiles/users/");
       return response.data;
-  } catch (error) {
+  } catch (error: any) {
+      if (error.response && error.response.status === 403) {
+        console.warn("Access denied to fetch all users (403). Returning empty list.");
+        return [];
+      }
       console.error("Failed to fetch all users", error);
       return [];
   }

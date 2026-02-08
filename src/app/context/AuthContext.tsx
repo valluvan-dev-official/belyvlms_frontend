@@ -70,22 +70,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     initAuth();
+
+    // LISTEN FOR EXTERNAL AUTH UPDATES (e.g., from Interceptor 403 Handler)
+    const handleAuthUpdate = () => {
+      console.log("🔄 Auth Context: Received external update signal. Reloading state...");
+      const localData = getCurrentUser();
+      if (localData) {
+        setUser(localData.user);
+        setActiveRole(localData.role);
+        setAvailableRoles(localData.available_roles || []);
+        setPermissions(localData.permissions || []);
+      }
+    };
+
+    window.addEventListener("belyv_auth_update", handleAuthUpdate);
+    return () => window.removeEventListener("belyv_auth_update", handleAuthUpdate);
   }, []);
 
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
       const userData = await loginUser({ email, password });
+      
+      // OPTIMIZATION: Use data directly from login response
+      // No need to call getCurrentPermissions() immediately because login response
+      // already contains the fresh permissions for the active role.
+      
       setUser(userData.user);
       setActiveRole(userData.role);
       setAvailableRoles(userData.available_roles);
-      // Refresh permissions from endpoint to avoid stale data
-      try {
-        const freshPerms = await getCurrentPermissions();
-        setPermissions(freshPerms.length ? freshPerms : userData.permissions);
-      } catch {
-        setPermissions(userData.permissions);
-      }
+      setPermissions(userData.permissions);
+      
     } catch (error) {
       throw error;
     } finally {
@@ -120,7 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Navigate to dashboard is usually handled by the component calling this, 
       // or we can force it here if strictly required.
       // For now, we update state, and the app should react.
-      window.location.href = "/dashboard"; 
+      // window.location.href = "/dashboard"; 
     } catch (error) {
       console.error("Failed to switch role:", error);
       throw error;
@@ -130,24 +145,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const hasPermission = useCallback((permissionCode: string) => {
+    if (!permissionCode) return true;
     return permissions.includes(permissionCode);
   }, [permissions]);
 
+  const value = {
+    user,
+    activeRole,
+    availableRoles,
+    permissions,
+    isAuthenticated: !!user,
+    isLoading,
+    login,
+    logout,
+    switchRole,
+    hasPermission
+  };
+
   return (
-    <AuthContext.Provider 
-      value={{ 
-        user, 
-        activeRole,
-        availableRoles,
-        permissions,
-        isAuthenticated: !!user, 
-        isLoading,
-        login, 
-        logout,
-        switchRole,
-        hasPermission
-      }}
-    >
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

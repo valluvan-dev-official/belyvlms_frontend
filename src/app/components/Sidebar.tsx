@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { listOnboardRequests } from '../onboardRequests/api';
+import { PERMISSIONS } from '../config/permissions';
 
 interface SidebarProps {
   activeItem?: string;
@@ -31,12 +32,14 @@ interface NavItem {
   badge?: number;
   path?: string;
   subItems?: SubNavItem[];
+  permission?: string;
 }
 
 interface SubNavItem {
   id: string;
   label: string;
   path: string;
+  permission?: string;
 }
 
 export function Sidebar({ activeItem = 'overview', isCollapsed = false, onToggleCollapse }: SidebarProps) {
@@ -44,7 +47,7 @@ export function Sidebar({ activeItem = 'overview', isCollapsed = false, onToggle
   const [dashboardDropdownOpen, setDashboardDropdownOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const { activeRole, logout } = useAuth();
+  const { activeRole, permissions, logout, hasPermission } = useAuth();
   const [onboardPendingCount, setOnboardPendingCount] = useState<number>(0);
 
   useEffect(() => {
@@ -64,44 +67,76 @@ export function Sidebar({ activeItem = 'overview', isCollapsed = false, onToggle
   }, [activeRole?.code]);
 
   const navItems: NavItem[] = [
-    { id: 'overview', icon: <LayoutGrid size={20} />, label: 'Dashboard', path: '/dashboard' },
-    { id: 'assignment', icon: <ClipboardList size={20} />, label: 'Assignment' },
-    { id: 'reports', icon: <ChartBar size={20} />, label: 'Reports', badge: 1 },
+    { id: 'overview', icon: <LayoutGrid size={20} />, label: 'Dashboard', path: '/dashboard' }, // Removed permission check
+    { id: 'assignment', icon: <ClipboardList size={20} />, label: 'Assignment' }, // Removed permission check
+    { id: 'reports', icon: <ChartBar size={20} />, label: 'Reports', badge: 1, permission: PERMISSIONS.DASHBOARD_WIDGET_STATS_VIEW },
     { 
       id: 'management', 
       icon: <Users size={20} />, 
       label: 'Management',
       badge: onboardPendingCount || undefined,
       subItems: [
-        { id: 'users', label: 'Users', path: '/management/users' },
-        { id: 'onboard-requests', label: 'Onboard Requests', path: '/management/onboard-requests' },
-        { id: 'students', label: 'Students', path: '/management/students' },
-        { id: 'trainers', label: 'Trainers', path: '/management/trainers' },
+        { id: 'users', label: 'Users', path: '/management/users', permission: PERMISSIONS.USER_VIEW },
+        { id: 'onboard-requests', label: 'Onboard Requests', path: '/management/onboard-requests', permission: PERMISSIONS.USER_VIEW },
+        { id: 'students', label: 'Students', path: '/management/students', permission: PERMISSIONS.STUDENT_MANAGEMENT_VIEW },
+        { id: 'trainers', label: 'Trainers', path: '/management/trainers', permission: PERMISSIONS.TRAINER_VIEW },
       ]
     },
-    { id: 'file-storage', icon: <FolderClosed size={20} />, label: 'File Storage' },
-    { id: 'inbox', icon: <Inbox size={20} />, label: 'Inbox', badge: 1 },
+    { id: 'file-storage', icon: <FolderClosed size={20} />, label: 'File Storage' }, // Removed permission check
+    { id: 'inbox', icon: <Inbox size={20} />, label: 'Inbox', badge: 1 }, // Removed permission check
     { 
       id: 'settings', 
       icon: <Settings size={20} />, 
       label: 'Settings',
+      // Removed generic permission check. Visibility will be derived from subItems.
       subItems: [
-        { id: 'access-control', label: 'Access Control', path: '/management/access-control' }
+        { 
+            id: 'access-control', 
+            label: 'Access Control', 
+            path: '/management/access-control', 
+            // Allow if user has ANY access control permission
+            permission: undefined 
+        },
+        { id: 'audit-logs', label: 'Audit Logs', path: '/management/audit-logs', permission: PERMISSIONS.AUDIT_LOG_VIEW },
+        { id: 'system-log', label: 'System Log', path: '/audit', permission: PERMISSIONS.AUDIT_LOG_VIEW },
+        { id: 'profile-configs', label: 'Profile Configs', path: '/management/profile-configs', permission: PERMISSIONS.ACCESS_CONTROL_VIEW },
+        { id: 'profile-fields', label: 'Profile Fields', path: '/management/profile-fields', permission: PERMISSIONS.ACCESS_CONTROL_VIEW },
       ]
     },
   ];
 
-  // SAM-only admin schema management links
-  if (activeRole?.code === 'SAM') {
-    const mgmt = navItems.find((n) => n.id === 'management');
-    if (mgmt && mgmt.subItems) {
-      // Insert after Trainers
-      mgmt.subItems.push(
-        { id: 'profile-configs', label: 'Profile Configs', path: '/management/profile-configs' },
-        { id: 'profile-fields', label: 'Profile Fields', path: '/management/profile-fields' },
-      );
+  // Filter items based on permissions
+  const visibleNavItems = navItems.filter(item => {
+    // Check main item permission
+    if (item.permission && !hasPermission(item.permission)) {
+      return false;
     }
-  }
+
+    // Check sub items
+    if (item.subItems) {
+      // Filter sub-items based on permissions
+      const visibleSubItems = item.subItems.filter(subItem => {
+        // Special logic for Access Control: Show if user has ANY relevant permission
+        if (subItem.id === 'access-control') {
+            return hasPermission(PERMISSIONS.ACCESS_CONTROL_MATRIX_VIEW) || 
+                   hasPermission(PERMISSIONS.ACCESS_CONTROL_MATRIX_EDIT) ||
+                   hasPermission(PERMISSIONS.ROLE_VIEW) || 
+                   hasPermission(PERMISSIONS.PERMISSION_LIBRARY_VIEW);
+        }
+        return !subItem.permission || hasPermission(subItem.permission);
+      });
+      
+      // If item has subItems but all are hidden, hide the main item
+      if (visibleSubItems.length === 0) {
+        return false;
+      }
+      
+      // Update the item with filtered subItems
+      item.subItems = visibleSubItems;
+    }
+
+    return true;
+  });
 
   const toggleExpanded = (itemId: string) => {
     setExpandedItems(prev => 
@@ -153,7 +188,7 @@ export function Sidebar({ activeItem = 'overview', isCollapsed = false, onToggle
 
       {/* Navigation */}
       <nav className="flex-1 flex flex-col gap-1 overflow-y-auto">
-        {navItems.map((item) => (
+        {visibleNavItems.map((item) => (
           <div key={item.id}>
             <button
               onClick={() => handleNavClick(item)}

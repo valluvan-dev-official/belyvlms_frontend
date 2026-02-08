@@ -6,6 +6,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { getOnboardRequest, onboardRequest, patchOnboardRequest, performOnboardRequestAction } from "../api";
 import type { OnboardRequestDetail } from "../types";
 import { StatusBadge } from "../components/StatusBadge";
+import { PermissionGuard } from "../../components/PermissionGuard";
+import { PERMISSIONS } from "../../config/permissions";
+import { useAuth } from "../../context/AuthContext";
 
 const formatDate = (value?: string | null) => {
   if (!value) return "-";
@@ -177,31 +180,38 @@ export function OnboardRequestDetailPage() {
             <span className="text-sm font-medium text-[#1A1D1F]">Refresh</span>
           </button>
 
-          <button
-            onClick={doOnboard}
-            disabled={!canOnboard || onboarding || loading || !data}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#4ECDC4] to-[#44A08D] text-white rounded-xl hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Send size={18} />
-            <span className="text-sm font-medium">{onboarding ? "Onboarding..." : data?.status === "ERROR" ? "Retry Onboard" : "Onboard"}</span>
-          </button>
+          <PermissionGuard permission={PERMISSIONS.USER_MANAGEMENT_CREATE}>
+            <button
+              onClick={doOnboard}
+              disabled={!canOnboard || onboarding || loading || !data}
+              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#4ECDC4] to-[#44A08D] text-white rounded-xl hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Send size={18} />
+              <span className="text-sm font-medium">{onboarding ? "Onboarding..." : data?.status === "ERROR" ? "Retry Onboard" : "Onboard"}</span>
+            </button>
+          </PermissionGuard>
 
           {data?.status === "PENDING_APPROVAL" && (
             <>
-              <button
-                onClick={() => openActionModal("send_back")}
-                disabled={loading || saving}
-                className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#F59E0B] text-[#F59E0B] rounded-xl hover:bg-[#FFF3CD] transition-colors disabled:opacity-50"
-              >
-                <span className="text-sm font-medium">Send Back</span>
-              </button>
-              <button
-                onClick={() => openActionModal("drop")}
-                disabled={loading || saving}
-                className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#E63946] text-[#E63946] rounded-xl hover:bg-[#FFE5E5] transition-colors disabled:opacity-50"
-              >
-                <span className="text-sm font-medium">Drop</span>
-              </button>
+              <PermissionGuard permission={PERMISSIONS.USER_MANAGEMENT_EDIT}>
+                <button
+                  onClick={() => openActionModal("send_back")}
+                  disabled={loading || saving}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#F59E0B] text-[#F59E0B] rounded-xl hover:bg-[#FFF3CD] transition-colors disabled:opacity-50"
+                >
+                  <span className="text-sm font-medium">Send Back</span>
+                </button>
+              </PermissionGuard>
+              
+              <PermissionGuard permission={PERMISSIONS.USER_MANAGEMENT_DELETE}>
+                <button
+                  onClick={() => openActionModal("drop")}
+                  disabled={loading || saving}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#E63946] text-[#E63946] rounded-xl hover:bg-[#FFE5E5] transition-colors disabled:opacity-50"
+                >
+                  <span className="text-sm font-medium">Drop</span>
+                </button>
+              </PermissionGuard>
             </>
           )}
         </div>

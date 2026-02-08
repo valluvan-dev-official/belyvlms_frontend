@@ -1,0 +1,1 @@
+import{u as o,j as r}from"./index-DugLq9wu.js";const x=({permission:e,permissions:t,children:u,fallback:s=null})=>{const{hasPermission:n}=o();return(e?n(e):t&&t.length>0?t.every(l=>n(l)):!0)?r.jsx(r.Fragment,{children:u}):r.jsx(r.Fragment,{children:s})};export{x as P};

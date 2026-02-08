@@ -8,6 +8,8 @@ import {
   updateProfileField, 
   deleteProfileField 
 } from "../services/ProfileService/ProfileService";
+import { PERMISSIONS } from "../config/permissions";
+import { PermissionGuard } from "../components/PermissionGuard";
 import { Shield, Plus, Save, Trash2, Edit, AlertTriangle, Search, Home, ChevronRight, ArrowLeft, X, CheckCircle2, SlidersHorizontal } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -15,8 +17,8 @@ import { toast } from "sonner";
 type FieldType = "TEXT" | "NUMBER" | "DATE" | "BOOLEAN" | "CHOICE";
 
 export function ProfileFieldManager() {
-  const { activeRole } = useAuth();
-  const isSAM = activeRole?.code === "SAM";
+  const { activeRole, hasPermission } = useAuth();
+  const canView = hasPermission(PERMISSIONS.ACCESS_CONTROL_ROLE_VIEW);
   
   // Data State
   const [roles, setRoles] = useState<Role[]>([]);
@@ -187,7 +189,7 @@ export function ProfileFieldManager() {
     return true;
   });
 
-  if (!isSAM) {
+  if (!canView) {
     return (
       <div className="p-8">
         <div className="max-w-xl mx-auto bg-white rounded-2xl border border-[#E0E0E2] p-6 text-center shadow-sm">
@@ -195,7 +197,7 @@ export function ProfileFieldManager() {
             <AlertTriangle size={20} />
           </div>
           <h1 className="text-lg font-bold text-[#1A1D1F]">Access Restricted</h1>
-          <p className="text-sm text-[#6E7191] mt-2">Only SAM can manage field definitions.</p>
+          <p className="text-sm text-[#6E7191] mt-2">You do not have permission to manage field definitions.</p>
         </div>
       </div>
     );
@@ -339,13 +341,15 @@ export function ProfileFieldManager() {
                                 </div>
                             </div>
                         </div>
-                        <button
-                            onClick={openCreate}
-                            className="flex items-center gap-2 px-4 py-2 bg-[#1A1D1F] text-white text-sm font-semibold rounded-xl hover:bg-black transition-all shadow-sm"
-                        >
-                            <Plus size={16} />
-                            Add Field
-                        </button>
+                        <PermissionGuard permission={PERMISSIONS.ACCESS_CONTROL_ROLE_CREATE}>
+                            <button
+                                onClick={openCreate}
+                                className="flex items-center gap-2 px-4 py-2 bg-[#1A1D1F] text-white text-sm font-semibold rounded-xl hover:bg-black transition-all shadow-sm"
+                            >
+                                <Plus size={16} />
+                                Add Field
+                            </button>
+                        </PermissionGuard>
                     </div>
 
                     {/* Fields List */}
@@ -528,13 +532,15 @@ export function ProfileFieldManager() {
                 >
                     Cancel
                 </button>
-                <button
-                    onClick={saveField}
-                    className="px-6 py-2 bg-[#1A1D1F] text-white text-sm font-semibold rounded-xl hover:bg-black transition-all shadow-sm flex items-center gap-2"
-                >
-                    <Save size={16} />
-                    Save Field
-                </button>
+                <PermissionGuard permission={PERMISSIONS.ACCESS_CONTROL_ROLE_CREATE}>
+                    <button
+                        onClick={saveField}
+                        className="px-6 py-2 bg-[#1A1D1F] text-white text-sm font-semibold rounded-xl hover:bg-black transition-all shadow-sm flex items-center gap-2"
+                    >
+                        <Save size={16} />
+                        Save Field
+                    </button>
+                </PermissionGuard>
             </div>
           </div>
         </div>

@@ -27,9 +27,13 @@ interface User {
 
 import { getAllUsers, UserListItem } from '../services/ProfileService/ProfileService';
 import { useNavigate } from 'react-router-dom';
+import { PermissionGuard } from '../components/PermissionGuard';
+import { PERMISSIONS } from '../config/permissions';
+import { useAuth } from '../context/AuthContext';
 
 export function UserManagementPage() {
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRole, setSelectedRole] = useState<string>('all');
@@ -39,6 +43,12 @@ export function UserManagementPage() {
   const itemsPerPage = 8;
 
   const fetchUsers = async () => {
+    // Permission Guard: Only fetch if user has USER_VIEW
+    if (!hasPermission(PERMISSIONS.USER_VIEW)) {
+      setUsers([]);
+      return;
+    }
+
     try {
       const data: UserListItem[] = await getAllUsers();
       const mapped: User[] = data.map(u => ({
@@ -147,23 +157,29 @@ export function UserManagementPage() {
           <p className="text-sm text-[#6E7191]">Manage and monitor all users in the system</p>
         </div>
         <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#E0E0E2] rounded-xl hover:border-[#4ECDC4] transition-colors">
-            <Download size={18} className="text-[#6E7191]" />
-            <span className="text-sm font-medium text-[#1A1D1F]">Export</span>
-          </button>
-          <button
-            onClick={() => navigate('/management/onboard-requests')}
-            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#E0E0E2] rounded-xl hover:border-[#4ECDC4] transition-colors"
-          >
-            <span className="text-sm font-medium text-[#1A1D1F]">Onboard Requests</span>
-          </button>
-          <button 
-            onClick={() => navigate('/management/add-user')}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#4ECDC4] to-[#44A08D] text-white rounded-xl hover:shadow-lg transition-all"
-          >
-            <UserPlus size={18} />
-            <span className="text-sm font-medium">Add User</span>
-          </button>
+          <PermissionGuard permission={PERMISSIONS.USER_MANAGEMENT_EXPORT}>
+            <button className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#E0E0E2] rounded-xl hover:border-[#4ECDC4] transition-colors">
+              <Download size={18} className="text-[#6E7191]" />
+              <span className="text-sm font-medium text-[#1A1D1F]">Export</span>
+            </button>
+          </PermissionGuard>
+          <PermissionGuard permission={PERMISSIONS.USER_VIEW}>
+            <button
+              onClick={() => navigate('/management/onboard-requests')}
+              className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#E0E0E2] rounded-xl hover:border-[#4ECDC4] transition-colors"
+            >
+              <span className="text-sm font-medium text-[#1A1D1F]">Onboard Requests</span>
+            </button>
+          </PermissionGuard>
+          <PermissionGuard permission={PERMISSIONS.USER_MANAGEMENT_CREATE}>
+            <button 
+              onClick={() => navigate('/management/add-user')}
+              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#4ECDC4] to-[#44A08D] text-white rounded-xl hover:shadow-lg transition-all"
+            >
+              <UserPlus size={18} />
+              <span className="text-sm font-medium">Add User</span>
+            </button>
+          </PermissionGuard>
         </div>
       </div>
 
@@ -355,12 +371,16 @@ export function UserManagementPage() {
                       <button className="p-2 hover:bg-[#F7F7F8] rounded-lg transition-colors" title="Send Email">
                         <Mail size={16} className="text-[#6E7191]" />
                       </button>
-                      <button className="p-2 hover:bg-[#F7F7F8] rounded-lg transition-colors" title="Edit">
-                        <Edit size={16} className="text-[#6E7191]" />
-                      </button>
-                      <button className="p-2 hover:bg-[#FFF5F7] rounded-lg transition-colors" title="Delete">
-                        <Trash2 size={16} className="text-[#FF6B9D]" />
-                      </button>
+                      <PermissionGuard permission={PERMISSIONS.USER_MANAGEMENT_EDIT}>
+                        <button className="p-2 hover:bg-[#F7F7F8] rounded-lg transition-colors" title="Edit">
+                          <Edit size={16} className="text-[#6E7191]" />
+                        </button>
+                      </PermissionGuard>
+                      <PermissionGuard permission={PERMISSIONS.USER_MANAGEMENT_DELETE}>
+                        <button className="p-2 hover:bg-[#FFF5F7] rounded-lg transition-colors" title="Delete">
+                          <Trash2 size={16} className="text-[#FF6B9D]" />
+                        </button>
+                      </PermissionGuard>
                       <button className="p-2 hover:bg-[#F7F7F8] rounded-lg transition-colors">
                         <MoreVertical size={16} className="text-[#6E7191]" />
                       </button>

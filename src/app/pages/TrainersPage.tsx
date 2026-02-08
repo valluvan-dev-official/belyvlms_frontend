@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Search, 
   Download, 
@@ -13,8 +14,20 @@ import {
 } from 'lucide-react';
 import { getTrainers, getTrainerStats, Trainer, TrainerFilters, TrainerStats } from '../services/TrainerService/TrainerService';
 import { toast } from 'sonner';
+import { PermissionGuard } from '../components/PermissionGuard';
+import { PERMISSIONS } from '../config/permissions';
+import { useAuth } from '../context/AuthContext';
 
 export function TrainersPage() {
+  const navigate = useNavigate();
+  const { hasPermission } = useAuth();
+
+  useEffect(() => {
+    if (!hasPermission(PERMISSIONS.TRAINER_VIEW)) {
+      navigate('/dashboard');
+    }
+  }, [hasPermission, navigate]);
+
   const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
@@ -87,10 +100,12 @@ export function TrainersPage() {
           <p className="text-[#6E7191] text-sm mt-1">Manage all trainers and instructors</p>
         </div>
         <div className="flex gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-[#E0E0E2] rounded-xl text-[#1A1D1F] font-medium hover:bg-[#F7F7F8] transition-colors">
-            <Download size={20} />
-            <span>Export</span>
-          </button>
+          <PermissionGuard permission={PERMISSIONS.TRAINER_VIEW}>
+            <button className="flex items-center gap-2 px-4 py-2 bg-white border border-[#E0E0E2] rounded-xl text-[#1A1D1F] font-medium hover:bg-[#F7F7F8] transition-colors">
+              <Download size={20} />
+              <span>Export</span>
+            </button>
+          </PermissionGuard>
         </div>
       </div>
 

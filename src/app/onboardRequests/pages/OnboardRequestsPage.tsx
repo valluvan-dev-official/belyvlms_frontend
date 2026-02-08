@@ -9,6 +9,9 @@ import type { OnboardRequestListItem } from "../types";
 import { StatusBadge } from "../components/StatusBadge";
 import { CreateOnboardRequestDialog } from "../components/CreateOnboardRequestDialog";
 import { StatsOverview } from "../components/StatsOverview";
+import { useAuth } from "../../context/AuthContext";
+import { PermissionGuard } from "../../components/PermissionGuard";
+import { PERMISSIONS } from "../../config/permissions";
 
 const formatDate = (value?: string | null) => {
   if (!value) return "-";
@@ -94,13 +97,15 @@ export function OnboardRequestsPage() {
             <RefreshCw size={18} className="text-[#6E7191]" />
             <span className="text-sm font-medium text-[#1A1D1F]">Refresh</span>
           </button>
-          <button
-            onClick={() => setCreateOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#4ECDC4] to-[#44A08D] text-white rounded-xl hover:shadow-lg transition-all"
-          >
-            <Plus size={18} />
-            <span className="text-sm font-medium">Create Request</span>
-          </button>
+          <PermissionGuard permission={PERMISSIONS.USER_MANAGEMENT_CREATE}>
+            <button
+              onClick={() => setCreateOpen(true)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#4ECDC4] to-[#44A08D] text-white rounded-xl hover:shadow-lg transition-all"
+            >
+              <Plus size={18} />
+              <span className="text-sm font-medium">Create Request</span>
+            </button>
+          </PermissionGuard>
         </div>
       </div>
 
