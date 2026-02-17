@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { 
-  LayoutGrid, 
-  ClipboardList, 
-  ChartBar, 
-  FolderClosed, 
-  Inbox, 
+import {
+  LayoutGrid,
+  ClipboardList,
+  ChartBar,
+  FolderClosed,
+  Inbox,
+  BookOpen,
+  GraduationCap,
   Settings,
   Users,
   ChevronDown,
@@ -70,9 +72,27 @@ export function Sidebar({ activeItem = 'overview', isCollapsed = false, onToggle
     { id: 'overview', icon: <LayoutGrid size={20} />, label: 'Dashboard', path: '/dashboard' }, // Removed permission check
     { id: 'assignment', icon: <ClipboardList size={20} />, label: 'Assignment' }, // Removed permission check
     { id: 'reports', icon: <ChartBar size={20} />, label: 'Reports', badge: 1, permission: PERMISSIONS.DASHBOARD_WIDGET_STATS_VIEW },
-    { 
-      id: 'management', 
-      icon: <Users size={20} />, 
+    {
+      id: 'course-management',
+      icon: <BookOpen size={20} />,
+      label: 'Course Management',
+      subItems: [
+        { id: 'courses-all', label: 'All Courses', path: '/courses' },
+        { id: 'courses-categories', label: 'Categories', path: '/courses/categories' },
+      ]
+    },
+    {
+      id: 'batch-management',
+      icon: <GraduationCap size={20} />,
+      label: 'Batch Management',
+      subItems: [
+        { id: 'batches-manage', label: 'Manage Batches', path: '/batches/manage' },
+        { id: 'batches-monitoring', label: 'Monitoring Dashboard', path: '/batches/monitoring' },
+      ]
+    },
+    {
+      id: 'management',
+      icon: <Users size={20} />,
       label: 'Management',
       badge: onboardPendingCount || undefined,
       subItems: [
@@ -80,22 +100,23 @@ export function Sidebar({ activeItem = 'overview', isCollapsed = false, onToggle
         { id: 'onboard-requests', label: 'Onboard Requests', path: '/management/onboard-requests', permission: PERMISSIONS.USER_VIEW },
         { id: 'students', label: 'Students', path: '/management/students', permission: PERMISSIONS.STUDENT_MANAGEMENT_VIEW },
         { id: 'trainers', label: 'Trainers', path: '/management/trainers', permission: PERMISSIONS.TRAINER_VIEW },
+        // Removed legacy Batches here to avoid duplication (moved to Batch Management section)
       ]
     },
     { id: 'file-storage', icon: <FolderClosed size={20} />, label: 'File Storage' }, // Removed permission check
     { id: 'inbox', icon: <Inbox size={20} />, label: 'Inbox', badge: 1 }, // Removed permission check
-    { 
-      id: 'settings', 
-      icon: <Settings size={20} />, 
+    {
+      id: 'settings',
+      icon: <Settings size={20} />,
       label: 'Settings',
       // Removed generic permission check. Visibility will be derived from subItems.
       subItems: [
-        { 
-            id: 'access-control', 
-            label: 'Access Control', 
-            path: '/management/access-control', 
-            // Allow if user has ANY access control permission
-            permission: undefined 
+        {
+          id: 'access-control',
+          label: 'Access Control',
+          path: '/management/access-control',
+          // Allow if user has ANY access control permission
+          permission: undefined
         },
         { id: 'audit-logs', label: 'Audit Logs', path: '/management/audit-logs', permission: PERMISSIONS.AUDIT_LOG_VIEW },
         { id: 'system-log', label: 'System Log', path: '/audit', permission: PERMISSIONS.AUDIT_LOG_VIEW },
@@ -118,19 +139,19 @@ export function Sidebar({ activeItem = 'overview', isCollapsed = false, onToggle
       const visibleSubItems = item.subItems.filter(subItem => {
         // Special logic for Access Control: Show if user has ANY relevant permission
         if (subItem.id === 'access-control') {
-            return hasPermission(PERMISSIONS.ACCESS_CONTROL_MATRIX_VIEW) || 
-                   hasPermission(PERMISSIONS.ACCESS_CONTROL_MATRIX_EDIT) ||
-                   hasPermission(PERMISSIONS.ROLE_VIEW) || 
-                   hasPermission(PERMISSIONS.PERMISSION_LIBRARY_VIEW);
+          return hasPermission(PERMISSIONS.ACCESS_CONTROL_MATRIX_VIEW) ||
+            hasPermission(PERMISSIONS.ACCESS_CONTROL_MATRIX_EDIT) ||
+            hasPermission(PERMISSIONS.ROLE_VIEW) ||
+            hasPermission(PERMISSIONS.PERMISSION_LIBRARY_VIEW);
         }
         return !subItem.permission || hasPermission(subItem.permission);
       });
-      
+
       // If item has subItems but all are hidden, hide the main item
       if (visibleSubItems.length === 0) {
         return false;
       }
-      
+
       // Update the item with filtered subItems
       item.subItems = visibleSubItems;
     }
@@ -139,8 +160,8 @@ export function Sidebar({ activeItem = 'overview', isCollapsed = false, onToggle
   });
 
   const toggleExpanded = (itemId: string) => {
-    setExpandedItems(prev => 
-      prev.includes(itemId) 
+    setExpandedItems(prev =>
+      prev.includes(itemId)
         ? prev.filter(id => id !== itemId)
         : [...prev, itemId]
     );
@@ -170,10 +191,9 @@ export function Sidebar({ activeItem = 'overview', isCollapsed = false, onToggle
   };
 
   return (
-    <aside 
-      className={`bg-white h-screen flex flex-col p-6 transition-all duration-300 ${
-        isCollapsed ? 'w-20' : 'w-64'
-      }`}
+    <aside
+      className={`bg-white h-screen flex flex-col p-6 transition-all duration-300 ${isCollapsed ? 'w-20' : 'w-64'
+        }`}
       style={{ borderRight: '1px solid #F5F5F7' }}
     >
       {/* Logo */}
@@ -195,7 +215,7 @@ export function Sidebar({ activeItem = 'overview', isCollapsed = false, onToggle
               className={`
                 w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all relative
                 ${isActive(item.id, item.path) && !item.subItems
-                  ? 'bg-[#1A1D1F] text-white' 
+                  ? 'bg-[#1A1D1F] text-white'
                   : 'text-[#6E7191] hover:bg-[#F7F7F8]'
                 }
                 ${isCollapsed ? 'justify-center' : ''}
@@ -235,7 +255,7 @@ export function Sidebar({ activeItem = 'overview', isCollapsed = false, onToggle
                     className={`
                       w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all text-sm
                       ${isSubItemActive(subItem.path)
-                        ? 'bg-[#F7F7F8] text-[#1A1D1F] font-medium' 
+                        ? 'bg-[#F7F7F8] text-[#1A1D1F] font-medium'
                         : 'text-[#6E7191] hover:bg-[#F7F7F8]'
                       }
                     `}

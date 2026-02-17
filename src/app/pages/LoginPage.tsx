@@ -12,12 +12,14 @@ export function LoginPage() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   
-  const { login, isAuthenticated } = useAuth();
+  const { login, isAuthenticated, activeRole } = useAuth();
   const navigate = useNavigate();
 
   // Redirect if already authenticated
   if (isAuthenticated) {
-    navigate('/dashboard', { replace: true });
+    const code = activeRole?.code?.toLowerCase();
+    const to = code === 'btr' || code === 'student' ? '/student' : '/dashboard';
+    navigate(to, { replace: true });
     return null;
   }
 
@@ -28,7 +30,9 @@ export function LoginPage() {
 
     try {
       await login(email, password);
-      navigate('/dashboard');
+      const code = activeRole?.code?.toLowerCase();
+      const to = code === 'btr' || code === 'student' ? '/student' : '/dashboard';
+      navigate(to);
     } catch (err) {
       setError('Invalid email or password');
     } finally {
