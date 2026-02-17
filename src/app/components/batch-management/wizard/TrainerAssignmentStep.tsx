@@ -7,7 +7,7 @@ import { Card } from '../../ui/card';
 import { Badge } from '../../ui/badge';
 import { Progress } from '../../ui/progress';
 import { BatchCreationForm } from '../../../types/batch';
-import { mockTrainers, mockTrainerWorkload } from '../../../data/batch-mock';
+import { mockTrainers, mockTrainerWorkload } from '../../data/batch-mock';
 
 interface TrainerAssignmentStepProps {
   data: Partial<BatchCreationForm>;

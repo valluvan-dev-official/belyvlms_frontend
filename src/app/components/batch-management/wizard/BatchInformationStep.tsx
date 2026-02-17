@@ -5,7 +5,7 @@ import { Label } from '../../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
 import { Button } from '../../ui/button';
 import { BatchCreationForm, DeliveryMode } from '../../../types/batch';
-import { mockCourses } from '../../../data/batch-mock';
+import { mockCourses } from '../../data/batch-mock';
 
 interface BatchInformationStepProps {
   data: Partial<BatchCreationForm>;
