@@ -35,3 +35,16 @@ export const assignRole = async (payload: { user: number | string; role: number 
   await api.post('rbac/assign-role/', payload);
 };
 
+
+export interface OnboardingOptions {
+  courses: { id: number; course_name: string; code: string }[];
+  trainers: { id: number; name: string }[];
+  consultants: { id: number; name: string }[];
+  sources: { id: number; name: string }[];
+  batches: { id: number; batch_id: string; status: string }[];
+}
+
+export const getOnboardingOptions = async (): Promise<OnboardingOptions> => {
+  const res = await api.get('rbac/onboarding/options/');
+  return res.data;
+};

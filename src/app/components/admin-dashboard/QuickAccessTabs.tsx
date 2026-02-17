@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Users, GraduationCap, BookOpen, UserCheck, BarChart3, Settings, Calendar, TrendingUp, Layers } from 'lucide-react';
 
 interface QuickAccessTabsProps {
@@ -8,6 +9,7 @@ interface QuickAccessTabsProps {
 }
 
 export function QuickAccessTabs({ activeSection, onSectionChange, role = 'admin' }: QuickAccessTabsProps) {
+  const navigate = useNavigate();
   const adminTabs = [
     { id: 'overview', label: 'Overview', icon: BarChart3 },
     { id: 'students', label: 'Students', icon: Users },
@@ -50,7 +52,15 @@ export function QuickAccessTabs({ activeSection, onSectionChange, role = 'admin'
           return (
             <button
               key={tab.id}
-              onClick={() => onSectionChange(tab.id)}
+              onClick={() => {
+                onSectionChange(tab.id);
+                if (role === 'student') {
+                  if (tab.id === 'overview') navigate('/student');
+                  else if (tab.id === 'courses') navigate('/student/my-courses');
+                  else if (tab.id === 'schedule') navigate('/student/schedule');
+                  else if (tab.id === 'progress') navigate('/student/progress');
+                }
+              }}
               className={`
                 flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm whitespace-nowrap transition-all
                 ${isActive 
