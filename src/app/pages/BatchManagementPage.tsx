@@ -20,7 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
 
-type ActionModal = 
+type ActionModal =
   | 'none'
   | 'add-student'
   | 'transfer-students'
@@ -43,15 +43,15 @@ export function BatchManagementPage() {
 
   // Filter batches
   const filteredBatches = batches.filter(batch => {
-    const matchesSearch = 
+    const matchesSearch =
       searchQuery === '' ||
       batch.batch_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
       batch.course_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       batch.trainer_name?.toLowerCase().includes(searchQuery.toLowerCase());
-    
+
     const matchesStatus = statusFilter === 'all' || batch.status === statusFilter;
     const matchesMode = modeFilter === 'all' || batch.batch_type === modeFilter;
-    
+
     return matchesSearch && matchesStatus && matchesMode;
   });
 
@@ -77,7 +77,7 @@ export function BatchManagementPage() {
 
   const handleSaveBatch = async (batch: BatchAPI) => {
     await new Promise(resolve => setTimeout(resolve, 1000));
-    
+
     if (drawerMode === 'create') {
       setBatches(prev => [...prev, { ...batch, id: `${prev.length + 1}` }]);
       toast.success('Batch created successfully');
@@ -89,8 +89,8 @@ export function BatchManagementPage() {
 
   const handleAddStudents = async (batchId: string, studentIds: string[]) => {
     await new Promise(resolve => setTimeout(resolve, 500));
-    setBatches(prev => prev.map(b => 
-      b.id === batchId 
+    setBatches(prev => prev.map(b =>
+      b.id === batchId
         ? { ...b, student_count: (b.student_count || 0) + studentIds.length }
         : b
     ));
@@ -98,7 +98,7 @@ export function BatchManagementPage() {
 
   const handleBatchAction = (action: BatchAction, batch: BatchAPI) => {
     setSelectedBatch(batch);
-    
+
     switch (action) {
       case 'add-student':
         setActiveModal('add-student');
@@ -204,7 +204,7 @@ export function BatchManagementPage() {
       const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
       return `${displayHour.toString().padStart(2, '0')}:${minutes} ${ampm}`;
     };
-    
+
     return `${formatTime(startTime)} - ${formatTime(endTime)}`;
   };
 
@@ -218,23 +218,24 @@ export function BatchManagementPage() {
     const minutes = date.getMinutes();
     const ampm = hours >= 12 ? 'p.m.' : 'a.m.';
     const displayHour = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
-    
+
     return `${month}. ${day}, ${year}, ${displayHour}:${minutes.toString().padStart(2, '0')} ${ampm}`;
   };
 
   return (
     <div className="p-6 space-y-6 bg-gray-50 min-h-screen">
       {/* Header */}
-      <div className="flex items-start justify-between">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Batch Management</h1>
           <p className="text-gray-600 mt-1">
             Manage learning delivery batches, schedules, and enrollments
           </p>
         </div>
-        <Button 
+        <Button
           onClick={handleCreateBatch}
-          className="bg-black hover:bg-gray-800 text-white gap-2 px-6 py-3 h-auto"
+          className="bg-black hover:bg-gray-800 text-white gap-2 px-6 py-3 h-auto w-full md:w-auto justify-center"
         >
           <Plus size={18} />
           Create Batch
@@ -309,9 +310,10 @@ export function BatchManagementPage() {
           />
         </div>
 
-        <div className="flex items-center gap-3 w-full sm:w-auto">
+
+        <div className="flex flex-col xl:flex-row items-stretch xl:items-center gap-3 w-full shrink-0">
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-full sm:w-48 bg-white border-gray-300 h-12">
+            <SelectTrigger className="w-full xl:w-48 bg-white border-gray-300 h-12">
               <SelectValue placeholder="All Statuses" />
             </SelectTrigger>
             <SelectContent>
@@ -324,7 +326,7 @@ export function BatchManagementPage() {
           </Select>
 
           <Select value={modeFilter} onValueChange={setModeFilter}>
-            <SelectTrigger className="w-full sm:w-48 bg-white border-gray-300 h-12">
+            <SelectTrigger className="w-full xl:w-48 bg-white border-gray-300 h-12">
               <SelectValue placeholder="All Modes" />
             </SelectTrigger>
             <SelectContent>
@@ -336,7 +338,7 @@ export function BatchManagementPage() {
             </SelectContent>
           </Select>
 
-          <Button variant="outline" className="gap-2 h-12 px-4 bg-white border-gray-300">
+          <Button variant="outline" className="gap-2 h-12 px-4 bg-white border-gray-300 w-full xl:w-auto justify-center">
             <Download size={18} />
             Export
           </Button>
@@ -425,7 +427,7 @@ export function BatchManagementPage() {
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-sm text-gray-700 max-w-[200px]">
-                        {batch.enrolled_students && batch.enrolled_students.length > 0 
+                        {batch.enrolled_students && batch.enrolled_students.length > 0
                           ? batch.enrolled_students.join(', ')
                           : '-'}
                       </div>

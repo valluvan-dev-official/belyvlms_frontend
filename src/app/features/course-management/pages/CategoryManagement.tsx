@@ -94,26 +94,30 @@ export function CategoryManagement() {
   };
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="p-4 md:p-6 space-y-6">
+      {/* Enterprise Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200 pb-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Category Management</h1>
-          <p className="text-sm text-gray-600 mt-1">
-            Define course classification and code generation base
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Category Management</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Define course classifications and manage code generation rules.
           </p>
         </div>
-        <Button onClick={openCreateDialog}>
+        <Button onClick={openCreateDialog} className="shadow-sm">
           <Plus className="w-4 h-4 mr-2" />
           Create Category
         </Button>
       </div>
 
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
-        <Book className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+      {/* Info Banner */}
+      <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-4 flex items-start gap-3">
+        <div className="p-1.5 bg-blue-100 rounded-md">
+          <Book className="w-4 h-4 text-blue-600" />
+        </div>
         <div>
-          <h4 className="font-medium text-blue-900">Category System</h4>
-          <p className="text-sm text-blue-700 mt-1">
-            Categories must be created before courses. Category codes are used to auto-generate course codes.
+          <h4 className="text-sm font-semibold text-blue-900">Category System</h4>
+          <p className="text-sm text-blue-700 mt-0.5 leading-relaxed">
+            Categories must be created before courses. The category code serves as a prefix for auto-generating unique course codes.
           </p>
         </div>
       </div>
@@ -271,7 +275,7 @@ export function CategoryManagement() {
                 <div>
                   <h4 className="font-medium text-red-900">Cannot Delete Category</h4>
                   <p className="text-sm text-red-700 mt-1">
-                    This category has {selectedCategory.courseCount} associated courses. 
+                    This category has {selectedCategory.courseCount} associated courses.
                     Please remove or reassign all courses before deleting.
                   </p>
                 </div>

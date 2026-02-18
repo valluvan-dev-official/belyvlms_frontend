@@ -27,25 +27,25 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
       {/* Sidebar - Desktop */}
       <div className="hidden lg:block">
-        <Sidebar 
-          activeItem="overview" 
-          isCollapsed={sidebarCollapsed} 
+        <Sidebar
+          activeItem="overview"
+          isCollapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         />
       </div>
 
       {/* Sidebar - Mobile/Tablet */}
       {mobileMenuOpen && (
-        <div className="lg:hidden fixed inset-0 z-40 bg-black bg-opacity-50" onClick={() => setMobileMenuOpen(false)}>
+        <div className="lg:hidden fixed inset-0 z-40 bg-transparent" onClick={() => setMobileMenuOpen(false)}>
           <div className="w-64 h-full" onClick={(e) => e.stopPropagation()}>
-            <Sidebar activeItem="overview" />
+            <Sidebar activeItem="overview" onNavItemClick={() => setMobileMenuOpen(false)} />
           </div>
         </div>
       )}
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto">
-        <div className="mx-auto p-6 lg:p-8 max-w-full">
+        <div className="mx-auto p-4 lg:p-8 max-w-full">
           {/* Header */}
           <header className="flex items-center justify-end gap-4 mb-8">
             <RoleSwitcher />
@@ -56,7 +56,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             </button>
 
             {/* Profile Toggle */}
-            <button 
+            <button
               onClick={() => setShowProfile(!showProfile)}
               className="ml-2 rounded-full transition-transform active:scale-95"
             >
@@ -77,13 +77,17 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       </div>
 
       {/* Right Profile Panel - Mobile/Tablet Overlay */}
-      {showProfile && (
-        <div className="xl:hidden fixed inset-0 z-40 bg-black bg-opacity-50" onClick={() => setShowProfile(false)}>
-          <div className="ml-auto h-full w-80" onClick={(e) => e.stopPropagation()}>
-            <RightSidebar isOpen={true} onClose={() => setShowProfile(false)} />
-          </div>
+      <div
+        className={`xl:hidden fixed inset-0 z-40 bg-transparent transition-opacity duration-300 ${showProfile ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+        onClick={() => setShowProfile(false)}
+      >
+        <div
+          className={`ml-auto h-full w-80 transform transition-transform duration-300 ${showProfile ? 'translate-x-0' : 'translate-x-full'}`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <RightSidebar isOpen={true} onClose={() => setShowProfile(false)} />
         </div>
-      )}
+      </div>
     </div>
   );
 }
