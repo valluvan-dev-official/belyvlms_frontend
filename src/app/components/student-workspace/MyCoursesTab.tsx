@@ -1,6 +1,13 @@
 import { useState } from 'react';
 import { MyCourseCard } from './MyCourseCard';
-import { BookOpen, Clock, CheckCircle } from 'lucide-react';
+import { BookOpen, Clock, CheckCircle, Search } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
 
 // Mock data with the exact visual style from the image
 const MOCK_COURSES = [
@@ -92,10 +99,14 @@ type FilterType = 'ALL' | 'IN_PROGRESS' | 'COMPLETED';
 
 export function MyCoursesTab() {
   const [activeFilter, setActiveFilter] = useState<FilterType>('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const filteredCourses = MOCK_COURSES.filter((course) => {
-    if (activeFilter === 'ALL') return true;
-    return course.course_status === activeFilter;
+    const matchesSearch = course.course_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      course.course_code.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus = activeFilter === 'ALL' || course.course_status === activeFilter;
+
+    return matchesSearch && matchesStatus;
   });
 
   const stats = {
@@ -145,25 +156,33 @@ export function MyCoursesTab() {
         </div>
       </div>
 
-      {/* Filter Tabs */}
-      <div className="bg-white rounded-xl border border-[#E0E0E2] p-2 mb-6 inline-flex gap-2">
-        {(['ALL', 'IN_PROGRESS', 'COMPLETED'] as FilterType[]).map((filter) => (
-          <button
-            key={filter}
-            onClick={() => setActiveFilter(filter)}
-            className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-all ${
-              activeFilter === filter
-                ? 'bg-[#1A1D1F] text-white'
-                : 'text-[#6E7191] hover:bg-[#F7F7F8]'
-            }`}
-          >
-            {filter === 'ALL'
-              ? 'All Courses'
-              : filter === 'IN_PROGRESS'
-              ? 'In Progress'
-              : 'Completed'}
-          </button>
-        ))}
+      {/* Modern Filter Toolbar */}
+      <div className="flex flex-col sm:flex-row items-center gap-4 mb-6">
+        {/* Search Input */}
+        <div className="relative flex-1 w-full">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+          <input
+            type="text"
+            placeholder="Search courses..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 bg-[#F7F7F8] border-transparent rounded-xl text-sm focus:outline-none focus:bg-white focus:ring-2 focus:ring-[#4ECDC4]/20 transition-all placeholder:text-gray-400"
+          />
+        </div>
+
+        {/* Filter Dropdown */}
+        <div className="w-full sm:w-[200px]">
+          <Select value={activeFilter} onValueChange={(value) => setActiveFilter(value as FilterType)}>
+            <SelectTrigger className="w-full bg-[#F7F7F8] border-transparent rounded-xl px-4 py-2.5 text-sm focus:bg-white focus:ring-2 focus:ring-[#4ECDC4]/20 transition-all text-[#1A1D1F]">
+              <SelectValue placeholder="Filter courses" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All Courses</SelectItem>
+              <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+              <SelectItem value="COMPLETED">Completed</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Course Cards Grid */}

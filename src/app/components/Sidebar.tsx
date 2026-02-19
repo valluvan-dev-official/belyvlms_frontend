@@ -25,6 +25,7 @@ interface SidebarProps {
   activeItem?: string;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
+  onNavItemClick?: () => void;
 }
 
 interface NavItem {
@@ -44,7 +45,7 @@ interface SubNavItem {
   permission?: string;
 }
 
-export function Sidebar({ activeItem = 'overview', isCollapsed = false, onToggleCollapse }: SidebarProps) {
+export function Sidebar({ activeItem = 'overview', isCollapsed = false, onToggleCollapse, onNavItemClick }: SidebarProps) {
   const [expandedItems, setExpandedItems] = useState<string[]>(['management']);
   const [dashboardDropdownOpen, setDashboardDropdownOpen] = useState(false);
   const navigate = useNavigate();
@@ -87,7 +88,7 @@ export function Sidebar({ activeItem = 'overview', isCollapsed = false, onToggle
       label: 'Batch Management',
       subItems: [
         { id: 'batches-manage', label: 'Manage Batches', path: '/batches/manage' },
-        { id: 'batches-monitoring', label: 'Monitoring Dashboard', path: '/batches/monitoring' },
+        { id: 'batches-monitoring', label: 'Batch Dashboard', path: '/batches/monitoring' },
       ]
     },
     {
@@ -172,11 +173,17 @@ export function Sidebar({ activeItem = 'overview', isCollapsed = false, onToggle
       toggleExpanded(item.id);
     } else if (item.path) {
       navigate(item.path);
+      if (onNavItemClick) {
+        onNavItemClick();
+      }
     }
   };
 
   const handleSubNavClick = (path: string) => {
     navigate(path);
+    if (onNavItemClick) {
+      onNavItemClick();
+    }
   };
 
   const isActive = (itemId: string, path?: string) => {
