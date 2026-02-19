@@ -1,5 +1,6 @@
 import { BookOpen, Calendar, Award, TrendingUp, Clock, DollarSign, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
+import { StackedCarousel } from './StackedCarousel';
 
 export function StudentDashboardOverview() {
   return (
@@ -65,7 +66,7 @@ function StudentHeroStats() {
       value: '₹15K',
       subtext: '₹45K Paid • ₹15K Pending',
       change: null,
-      changeType: 'warning' as const,
+      changeType: 'warning' as const, // Changed for strictness match
       icon: DollarSign,
       gradient: 'from-cyan-500 to-cyan-600'
     },
@@ -81,66 +82,68 @@ function StudentHeroStats() {
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-      {stats.map((stat) => {
-        const Icon = stat.icon;
-        const isWarning = stat.changeType === 'warning';
-        return (
-          <div
-            key={stat.label}
-            className={`relative bg-white rounded-2xl border shadow-sm p-4 overflow-hidden group hover:shadow-lg transition-all ${
-              isWarning ? 'border-orange-300' : 'border-gray-200'
-            }`}
-          >
-            {/* Gradient Background on Hover */}
-            <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${stat.gradient} opacity-5 rounded-full -mr-16 -mt-16 group-hover:opacity-10 transition-opacity`}></div>
-            
-            <div className="relative">
-              <div className="flex items-start justify-between mb-3">
-                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${stat.gradient} flex items-center justify-center shadow-lg`}>
-                  <Icon className="w-5 h-5 text-white" />
-                </div>
-                {stat.change && (
-                  <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full ${
-                    isWarning 
-                      ? 'bg-orange-50 border border-orange-200' 
+    <>
+      {/* Mobile & Tablet View: Stacked Carousel */}
+      <div className="block xl:hidden mb-6">
+        <StackedCarousel items={stats} />
+      </div>
+
+      {/* Desktop View: Grid */}
+      <div className="hidden xl:grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        {stats.map((stat) => {
+          const Icon = stat.icon;
+          const isWarning = stat.changeType === 'warning';
+          return (
+            <div
+              key={stat.label}
+              className={`relative bg-white rounded-2xl border shadow-sm p-4 overflow-hidden group hover:shadow-lg transition-all ${isWarning ? 'border-orange-300' : 'border-gray-200'
+                }`}
+            >
+              {/* Gradient Background on Hover */}
+              <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${stat.gradient} opacity-5 rounded-full -mr-16 -mt-16 group-hover:opacity-10 transition-opacity`}></div>
+
+              <div className="relative">
+                <div className="flex items-start justify-between mb-3">
+                  <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${stat.gradient} flex items-center justify-center shadow-lg`}>
+                    <Icon className="w-5 h-5 text-white" />
+                  </div>
+                  {stat.change && (
+                    <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full ${isWarning
+                      ? 'bg-orange-50 border border-orange-200'
                       : 'bg-emerald-50'
+                      }`}>
+                      <span className={`text-xs font-bold ${isWarning ? 'text-orange-600' : 'text-emerald-600'
+                        }`}>{stat.change}</span>
+                    </div>
+                  )}
+                  {isWarning && !stat.change && (
+                    <div className="flex items-center gap-1 bg-orange-100 px-2.5 py-1 rounded-full animate-pulse">
+                      <div className="w-2 h-2 rounded-full bg-orange-500"></div>
+                      <span className="text-xs font-bold text-orange-700">Due</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className={`text-3xl font-bold mb-1.5 ${isWarning ? 'text-orange-600' : 'text-[#1A1D1F]'
                   }`}>
-                    <span className={`text-xs font-bold ${
-                      isWarning ? 'text-orange-600' : 'text-emerald-600'
-                    }`}>{stat.change}</span>
-                  </div>
-                )}
-                {isWarning && (
-                  <div className="flex items-center gap-1 bg-orange-100 px-2.5 py-1 rounded-full animate-pulse">
-                    <div className="w-2 h-2 rounded-full bg-orange-500"></div>
-                    <span className="text-xs font-bold text-orange-700">Due</span>
-                  </div>
-                )}
-              </div>
+                  {stat.value}
+                </div>
 
-              <div className={`text-3xl font-bold mb-1.5 ${
-                isWarning ? 'text-orange-600' : 'text-[#1A1D1F]'
-              }`}>
-                {stat.value}
-              </div>
+                <div className={`text-sm font-semibold mb-1.5 ${isWarning ? 'text-orange-900' : 'text-[#1A1D1F]'
+                  }`}>
+                  {stat.label}
+                </div>
 
-              <div className={`text-sm font-semibold mb-1.5 ${
-                isWarning ? 'text-orange-900' : 'text-[#1A1D1F]'
-              }`}>
-                {stat.label}
-              </div>
-
-              <div className={`text-xs leading-relaxed ${
-                isWarning ? 'text-orange-700' : 'text-[#6E7191]'
-              }`}>
-                {stat.subtext}
+                <div className={`text-xs leading-relaxed ${isWarning ? 'text-orange-700' : 'text-[#6E7191]'
+                  }`}>
+                  {stat.subtext}
+                </div>
               </div>
             </div>
-          </div>
-        );
-      })}
-    </div>
+          );
+        })}
+      </div>
+    </>
   );
 }
 
@@ -242,7 +245,7 @@ function StudentKeyMetrics() {
                 <div className={`w-8 h-8 bg-white rounded-lg shadow-sm flex items-center justify-center flex-shrink-0`}>
                   <Icon className={`w-4 h-4 ${colors.icon}`} />
                 </div>
-                
+
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between mb-0.5">
                     <span className={`text-xs font-semibold ${colors.text}`}>{insight.label}</span>
@@ -297,32 +300,32 @@ function LearningProgressChart() {
           <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
             <defs>
               <linearGradient id="colorProgress" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#4ECDC4" stopOpacity={0.5}/>
-                <stop offset="95%" stopColor="#4ECDC4" stopOpacity={0.05}/>
+                <stop offset="5%" stopColor="#4ECDC4" stopOpacity={0.5} />
+                <stop offset="95%" stopColor="#4ECDC4" stopOpacity={0.05} />
               </linearGradient>
               <linearGradient id="colorTarget" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#44A08D" stopOpacity={0.3}/>
-                <stop offset="95%" stopColor="#44A08D" stopOpacity={0}/>
+                <stop offset="5%" stopColor="#44A08D" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#44A08D" stopOpacity={0} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" vertical={false} />
-            <XAxis 
-              dataKey="week" 
-              stroke="#9CA3AF" 
+            <XAxis
+              dataKey="week"
+              stroke="#9CA3AF"
               style={{ fontSize: '11px', fontWeight: '500' }}
               axisLine={false}
               tickLine={false}
             />
-            <YAxis 
-              stroke="#9CA3AF" 
+            <YAxis
+              stroke="#9CA3AF"
               style={{ fontSize: '11px', fontWeight: '500' }}
               axisLine={false}
               tickLine={false}
             />
-            <Tooltip 
-              contentStyle={{ 
-                backgroundColor: 'white', 
-                border: '1px solid #E5E7EB', 
+            <Tooltip
+              contentStyle={{
+                backgroundColor: 'white',
+                border: '1px solid #E5E7EB',
                 borderRadius: '8px',
                 padding: '8px',
                 boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
@@ -330,21 +333,21 @@ function LearningProgressChart() {
               }}
               labelStyle={{ fontWeight: 'bold', marginBottom: '4px' }}
             />
-            <Area 
-              type="monotone" 
-              dataKey="progress" 
-              stroke="#4ECDC4" 
+            <Area
+              type="monotone"
+              dataKey="progress"
+              stroke="#4ECDC4"
               strokeWidth={2}
-              fillOpacity={1} 
+              fillOpacity={1}
               fill="url(#colorProgress)"
               name="Progress %"
             />
-            <Area 
-              type="monotone" 
-              dataKey="target" 
-              stroke="#44A08D" 
+            <Area
+              type="monotone"
+              dataKey="target"
+              stroke="#44A08D"
               strokeWidth={2}
-              fillOpacity={1} 
+              fillOpacity={1}
               fill="url(#colorTarget)"
               name="Target %"
               strokeDasharray="5 5"
@@ -377,27 +380,27 @@ function PerformanceRadarChart() {
         <ResponsiveContainer width="100%" height="100%">
           <RadarChart data={data}>
             <PolarGrid stroke="#E5E7EB" />
-            <PolarAngleAxis 
-              dataKey="subject" 
+            <PolarAngleAxis
+              dataKey="subject"
               style={{ fontSize: '11px', fontWeight: '600', fill: '#6E7191' }}
             />
-            <PolarRadiusAxis 
-              angle={90} 
+            <PolarRadiusAxis
+              angle={90}
               domain={[0, 100]}
               style={{ fontSize: '10px', fill: '#9CA3AF' }}
             />
-            <Radar 
-              name="Your Score" 
-              dataKey="score" 
-              stroke="#4ECDC4" 
-              fill="#4ECDC4" 
+            <Radar
+              name="Your Score"
+              dataKey="score"
+              stroke="#4ECDC4"
+              fill="#4ECDC4"
               fillOpacity={0.6}
               strokeWidth={2}
             />
-            <Tooltip 
-              contentStyle={{ 
-                backgroundColor: 'white', 
-                border: '1px solid #E5E7EB', 
+            <Tooltip
+              contentStyle={{
+                backgroundColor: 'white',
+                border: '1px solid #E5E7EB',
                 borderRadius: '8px',
                 padding: '8px',
                 boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
